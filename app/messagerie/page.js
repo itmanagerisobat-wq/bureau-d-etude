@@ -185,8 +185,10 @@ export default function MessageriePage() {
 
   const filtrees = useMemo(() => {
     const q = filtre.trim().toLowerCase();
-    return conversations.filter((c) => !q || titre(c).toLowerCase().includes(q));
-  }, [conversations, filtre, titre]);
+    // Supervision : on masque les discussions privées / RH ouvertes mais restées vides
+    const vide = (c) => ["prive", "rh"].includes(c.type) && !(new Date(c.dernier_message_at) > new Date(c.created_at));
+    return conversations.filter((c) => (!superviseur || !vide(c) || c.id === active) && (!q || titre(c).toLowerCase().includes(q)));
+  }, [conversations, filtre, titre, superviseur, active]);
 
   const groupes = [
     ["public", "Canaux", "list"],

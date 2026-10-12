@@ -2,6 +2,18 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.21 — colonne Client, filtre Date, messagerie sans discussions vides, listes depuis les comptes
+
+**Migration à exécuter :** `migration_workflow_v25.sql`.
+
+- **Colonne Client** dans les tableaux de Saisie (file d'attente et dossiers en cours, avec filtre) et de Qualité ;
+  le client est aussi pris en compte dans la recherche.
+- **Saisie → Dossiers en cours** : filtre façon Excel sur la colonne **Date** (comme Fiche et Ingénieur).
+- **Messagerie (admin)** : les discussions privées ou RH ouvertes mais sans aucun message ne sont plus affichées.
+- **Paramètres → Comptes → « Remplir les listes depuis les comptes »** : ajoute (ou réactive) chaque compte Ingénieur dans
+  la liste Ingénieurs et chaque compte Qualité dans la liste Service qualité. Rien n'est supprimé.
+- Couleurs : Bleu Hill conservé.
+
 ## Version 3.20 — distribution de la file automatique ou manuelle
 
 **Migration à exécuter :** `migration_workflow_v24.sql`.

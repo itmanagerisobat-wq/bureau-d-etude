@@ -324,7 +324,7 @@ export default function QualitePage() {
   const q = recherche.trim().toLowerCase();
   const correspond = (d) =>
     !q ||
-    [d.nom_dossier, d.beneficiaire_nom, d.beneficiaire_adresse, d.beneficiaire_telephone, d.ingenieur, d.nom_operation]
+    [d.nom_dossier, d.beneficiaire_nom, d.beneficiaire_adresse, d.beneficiaire_telephone, d.ingenieur, d.nom_operation, d.client]
       .filter(Boolean)
       .some((v) => v.toLowerCase().includes(q));
 
@@ -768,6 +768,7 @@ export default function QualitePage() {
                 <th>Date</th>
                 <th>Dossier</th>
                 <th>Ingénieur</th>
+                <th>Client</th>
                 <th>Fiche</th>
                 <th>Depuis</th>
                 <th>Statut</th>
@@ -814,6 +815,7 @@ export default function QualitePage() {
                         {d.hors_habilitation && d.ingenieur && !habilite(d.ingenieur, d.nom_operation) && <span className="block text-[11px] text-isoGold-dark">hors fiche habituelle</span>}
                         {d.valide_par_ingenieur && <span className="block text-[11px] text-isoGreen-dark">corrigé et validé par l'ingénieur</span>}
                       </td>
+                      <td className="text-ink/70">{d.client || "—"}</td>
                       <td className="text-ink/70 whitespace-nowrap">{d.nom_operation}</td>
                       <td>
                         {h !== null && ![S.VALIDE, ...STATUTS_MANUELS].includes(d.etat) ? (
@@ -858,7 +860,7 @@ export default function QualitePage() {
                     </tr>
                     {ouvert && (
                       <tr>
-                        <td colSpan={8} className="bg-paper/70 !py-0">
+                        <td colSpan={9} className="bg-paper/70 !py-0">
                           {panneauAction(d)}
                         </td>
                       </tr>
@@ -868,7 +870,7 @@ export default function QualitePage() {
               })}
               {lignes.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="table-empty">
+                  <td colSpan={9} className="table-empty">
                     Aucun dossier pour ce filtre.
                   </td>
                 </tr>

@@ -97,6 +97,7 @@ export default function GestionComptes({ supabase }) {
   const [lot, setLot] = useState(null); // { titre, lignes: [...] } — aperçu avant création / import
   const [envoi, setEnvoi] = useState(false);
   const [bilan, setBilan] = useState(null);
+  const [remplissage, setRemplissage] = useState("");
   const [nbQualite, setNbQualite] = useState(4);
   const [nbResp, setNbResp] = useState(2);
   const fichierRef = useRef(null);
@@ -334,6 +335,20 @@ export default function GestionComptes({ supabase }) {
     }
   }
 
+  // Listes Ingénieurs / Service qualité remplies à partir des comptes existants
+  async function remplirListes() {
+    setRemplissage("…");
+    const { data, error } = await supabase.rpc("fn_remplir_listes_depuis_comptes");
+    if (error)
+      return setRemplissage(
+        /fn_remplir_listes_depuis_comptes|function/i.test(error.message) ? "Exécutez d'abord la migration V25 dans Supabase." : "Erreur : " + error.message
+      );
+    setRemplissage(
+      `Ingénieurs : ${data.ingenieurs_ajoutes} ajouté(s), ${data.ingenieurs_reactives} réactivé(s) · Service qualité : ${data.qualite_ajoutes} ajouté(s), ${data.qualite_reactives} réactivé(s) ✓`
+    );
+    charger();
+  }
+
   async function supprimerCompte(compte) {
     if (!confirm(`Supprimer définitivement le compte ${identifiant(compte)} ? Cette action est irréversible.`)) return;
     try {
@@ -396,6 +411,10 @@ export default function GestionComptes({ supabase }) {
             Générer les comptes ingénieurs
             <span className="badge bg-white/20 text-white ml-1">{ingenieursSansCompte.length}</span>
           </button>
+          <button className="btn-secondary btn-sm" onClick={remplirListes} title="Ajoute dans Paramètres → Listes les ingénieurs et les membres de la Qualité qui ont un compte">
+            <Icon name="list" size={14} />
+            Remplir les listes depuis les comptes
+          </button>
           <span className="w-px h-8 bg-line mx-1" />
           <label className="text-xs font-semibold text-ink/60 flex flex-col gap-1">
             Comptes Qualité
@@ -430,6 +449,11 @@ export default function GestionComptes({ supabase }) {
             </button>
           </span>
         </div>
+        {remplissage && (
+          <p className={`text-xs mt-2 ${/Erreur|Exécutez/.test(remplissage) ? "text-isoRed-dark" : "text-isoGreen-dark"}`}>
+            {remplissage === "…" ? "Remplissage en cours…" : remplissage}
+          </p>
+        )}
         <p className="text-[11px] text-ink/45 mt-2">
           Import : colonnes « Nom d'utilisateur », « Mot de passe », « Nom complet », « Rôle » (Ingénieur, Qualité, Responsable, Admin), « Ingénieur lié » (facultatif).
           Un identifiant existant est mis à jour (mot de passe vide = inchangé).

@@ -50,7 +50,7 @@ export default function SaisiePage() {
   const [listeIngenieursOuverte, setListeIngenieursOuverte] = useState(false);
   // Filtres « façon Excel » dans les en-têtes : null = pas de filtre, sinon Set des valeurs gardées
   const [periode, setPeriode] = useState(PERIODE_INITIALE);
-  const [filtresCol, setFiltresCol] = useState({ ingenieur: null, fiche: null, statut: null, ficheFile: null });
+  const [filtresCol, setFiltresCol] = useState({ ingenieur: null, fiche: null, statut: null, date: null, client: null, ficheFile: null, clientFile: null });
   const [edition, setEdition] = useState(false);
 
   const [file, setFile] = useState([]);
@@ -260,22 +260,26 @@ export default function SaisiePage() {
     d.a_corriger && [S.ASSIGNE, S.FILE].includes(d.etat)
       ? (TYPES_RETOUR[typeDernierRetour(d)] || TYPES_RETOUR.interne).libelle
       : ETATS[d.etat]?.court || d.etat;
-  const COLS = { ingenieur: (d) => d.ingenieur, fiche: (d) => d.nom_operation, statut: libelleStatut };
+  // Date au format JJ/MM/AAAA (filtre façon Excel, plus récentes en premier)
+  const jourFr = (d) => (d.date ? d.date.slice(0, 10).split("-").reverse().join("/") : null);
+  const triDate = (a, b) => String(b.valeur).split("/").reverse().join("").localeCompare(String(a.valeur).split("/").reverse().join(""));
+  const COLS = { date: jourFr, ingenieur: (d) => d.ingenieur, client: (d) => d.client, fiche: (d) => d.nom_operation, statut: libelleStatut };
   const garde = (cle, d) => !filtresCol[cle] || filtresCol[cle].has(COLS[cle](d) || "—");
   const autresRecherche = dossiers.filter(
     (d) =>
       dansPeriode(d, periode) &&
       (!q ||
-      [d.nom_dossier, d.beneficiaire_nom, d.beneficiaire_adresse, d.ingenieur, d.nom_operation]
+      [d.nom_dossier, d.beneficiaire_nom, d.beneficiaire_adresse, d.ingenieur, d.nom_operation, d.client]
         .filter(Boolean)
         .some((v) => v.toLowerCase().includes(q)))
   );
-  const autres = autresRecherche.filter((d) => garde("ingenieur", d) && garde("fiche", d) && garde("statut", d));
+  const autres = autresRecherche.filter((d) => Object.keys(COLS).every((k) => garde(k, d)));
   // Chaque liste de valeurs tient compte des autres filtres (comme Excel)
   const valeursPour = (cle) =>
     valeursColonne(
       autresRecherche.filter((d) => Object.keys(COLS).every((k) => k === cle || garde(k, d))),
-      COLS[cle]
+      COLS[cle],
+      cle === "date" ? triDate : null
     );
   const filtreCol = (cle, libelle, alignDroite) => (
     <FiltreColonne
@@ -287,7 +291,10 @@ export default function SaisiePage() {
     />
   );
   const fileFiltree = file.filter(
-    (d) => dansPeriode(d, periode) && (!filtresCol.ficheFile || filtresCol.ficheFile.has(d.nom_operation || "—"))
+    (d) =>
+      dansPeriode(d, periode) &&
+      (!filtresCol.ficheFile || filtresCol.ficheFile.has(d.nom_operation || "—")) &&
+      (!filtresCol.clientFile || filtresCol.clientFile.has(d.client || "—"))
   );
 
   return (
@@ -394,6 +401,14 @@ export default function SaisiePage() {
                   <th>Dossier</th>
                   <th>
                     <FiltreColonne
+                      libelle="Client"
+                      valeurs={valeursColonne(file, (d) => d.client)}
+                      selection={filtresCol.clientFile}
+                      onChange={(sel) => setFiltresCol((f) => ({ ...f, clientFile: sel }))}
+                    />
+                  </th>
+                  <th>
+                    <FiltreColonne
                       libelle="Fiche"
                       valeurs={valeursColonne(file, (d) => d.nom_operation)}
                       selection={filtresCol.ficheFile}
@@ -427,6 +442,7 @@ export default function SaisiePage() {
                       </span>
                       {d.beneficiaire_nom && <span className="block text-xs text-ink/50">{d.beneficiaire_nom}</span>}
                     </td>
+                    <td className="text-ink/70">{d.client || "—"}</td>
                     <td className="text-ink/70 whitespace-nowrap">{d.nom_operation || <span className="text-isoGold-dark">À compléter</span>}</td>
                     <td className="text-ink/60">{d.nature_prod || "—"}</td>
                     <td className="text-ink/60 tabular whitespace-nowrap">
@@ -468,14 +484,14 @@ export default function SaisiePage() {
                 ))}
                 {fileFiltree.length === 0 && file.length > 0 && (
                   <tr>
-                    <td colSpan={6} className="table-empty">
+                    <td colSpan={7} className="table-empty">
                       Aucun dossier pour ce filtre.
                     </td>
                   </tr>
                 )}
                 {file.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="table-empty">
+                    <td colSpan={7} className="table-empty">
                       La file est vide. Ajoute des dossiers avec « Nouveau dossier » ou « Importer Excel ».
                     </td>
                   </tr>
@@ -507,9 +523,10 @@ export default function SaisiePage() {
             <table className="table table-hover">
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th>{filtreCol("date", "Date")}</th>
                   <th>Dossier</th>
                   <th>{filtreCol("ingenieur", "Ingénieur")}</th>
+                  <th>{filtreCol("client", "Client")}</th>
                   <th>{filtreCol("fiche", "Fiche")}</th>
                   <th>Retours</th>
                   <th>{filtreCol("statut", "Statut")}</th>
@@ -536,6 +553,7 @@ export default function SaisiePage() {
                       {d.ingenieur || "—"}
                       {d.ingenieur_modif && <span className="block text-[11px] text-ink/50">modif : {d.ingenieur_modif}</span>}
                     </td>
+                    <td className="text-ink/70">{d.client || "—"}</td>
                     <td className="text-ink/70 whitespace-nowrap">{d.nom_operation}</td>
                     <td>
                       <BadgeRetour dossier={d} />
@@ -548,7 +566,7 @@ export default function SaisiePage() {
                 ))}
                 {autres.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="table-empty">
+                    <td colSpan={8} className="table-empty">
                       Aucun dossier.
                     </td>
                   </tr>

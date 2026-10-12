@@ -108,11 +108,11 @@ export default function FiltreColonne({ libelle, valeurs, selection, onChange, a
 }
 
 /** Valeurs distinctes d'une colonne, avec leur nombre, triées. */
-export function valeursColonne(lignes, cle) {
+export function valeursColonne(lignes, cle, tri = null) {
   const m = new Map();
   for (const l of lignes) {
     const v = cle(l) || "—";
     m.set(v, (m.get(v) || 0) + 1);
   }
-  return [...m.entries()].map(([valeur, total]) => ({ valeur, total })).sort((a, b) => String(a.valeur).localeCompare(String(b.valeur)));
+  return [...m.entries()].map(([valeur, total]) => ({ valeur, total })).sort(tri || ((a, b) => String(a.valeur).localeCompare(String(b.valeur))));
 }
