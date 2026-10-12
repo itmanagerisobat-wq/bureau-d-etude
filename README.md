@@ -2,6 +2,25 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.18 — les Responsables peuvent valider
+
+- Un compte Responsable peut **Valider** un dossier dans Qualité : il est enregistré « Audité par » à son propre nom
+  (sans liste à choisir).
+- Son nom est enregistré **désactivé** dans la liste Service qualité (nécessaire en base) : il n'apparaît donc pas
+  dans l'équipe Qualité ni dans les listes de choix.
+- « Audité par » reprend toujours l'orthographe exacte enregistrée (majuscules comprises).
+
+## Version 3.17 — suppression d'un dossier avec traçabilité
+
+**Migration à exécuter :** `migration_workflow_v22.sql`.
+
+- Bouton **Supprimer le dossier** (Qualité → Traiter, et fiche du dossier dans Saisie), visible uniquement pour l'admin
+  et les Responsables. Motif obligatoire.
+- Avant suppression, une copie complète est archivée (dossier, historique, retours, commentaires, liste des fichiers ;
+  les fichiers restent dans le stockage).
+- **Paramètres → Dossiers supprimés** (admin uniquement, invisible pour les Responsables) : qui, quand, motif, contenu
+  du dossier, export Excel et **Restaurer**. Ce journal ne peut être ni modifié ni effacé.
+
 ## Version 3.16.2 — liaison RH : diagnostic
 
 - « Tester la connexion et envoyer un e-mail de test » enregistre d'abord l'adresse RH, puis teste séparément

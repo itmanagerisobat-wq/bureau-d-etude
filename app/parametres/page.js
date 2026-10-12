@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import { useAppData } from "@/lib/useAppData";
 import GestionComptes from "@/components/GestionComptes";
+import DossiersSupprimes from "@/components/DossiersSupprimes";
 import PageHeader from "@/components/ui/PageHeader";
 import Icon from "@/components/ui/Icon";
 import EmptyState from "@/components/ui/EmptyState";
@@ -26,6 +27,7 @@ const VUES = [
   ["audit", "Journal d'audit", "history", true],
   ["backups", "Sauvegardes", "database", true],
   ["donnees", "Données", "alert", true],
+  ["supprimes", "Dossiers supprimés", "history", "superviseur"],
 ];
 
 // Les statuts ne sont plus une liste déroulante : ils se règlent dans l'onglet « Statuts ».
@@ -40,7 +42,9 @@ const TABLES = [
 export default function ParametresPage() {
   const { profile, erreurProfil, options, loading, supabase, refresh } = useAppData();
   const estAdmin = profile?.role === "admin";
-  const vuesVisibles = VUES.filter(([, , , admin]) => !admin || estAdmin);
+  // « superviseur » = admin hors Responsables (journal des suppressions)
+  const estSuperviseur = estAdmin && profile?.fonction !== "Responsable";
+  const vuesVisibles = VUES.filter(([, , , admin]) => !admin || (admin === "superviseur" ? estSuperviseur : estAdmin));
   const tablesVisibles = TABLES.filter((t) => !t.admin || estAdmin);
   // Onglet affiché par défaut : le premier autorisé pour ce rôle (la Qualité n'a pas « Listes déroulantes »)
   const vueAutorisee = (v) => vuesVisibles.some(([k]) => k === v);
@@ -847,6 +851,8 @@ export default function ParametresPage() {
             </div>
           </div>
         )}
+
+        {vueAutorisee(vue) && vue === "supprimes" && <DossiersSupprimes supabase={supabase} />}
 
         {vueAutorisee(vue) && vue === "audit" && (
           <div className="card overflow-x-auto">

@@ -23,6 +23,7 @@ import { BadgeRetour } from "@/components/DossierTable";
 import UndoToast from "@/components/ui/UndoToast";
 import { attribuerAutomatiquement } from "@/lib/dispatch";
 import EditionDossier from "@/components/EditionDossier";
+import { supprimerDossierAvecTrace } from "@/lib/suppressionDossier";
 import ListeIngenieurs from "@/components/ListeIngenieurs";
 import FiltreColonne, { valeursColonne } from "@/components/ui/FiltreColonne";
 import FiltrePeriode, { PERIODE_INITIALE, dansPeriode } from "@/components/ui/FiltrePeriode";
@@ -543,10 +544,27 @@ export default function SaisiePage() {
             <>
               <div className="mb-4 flex items-center justify-between gap-3">
                 <StatutBadge etat={dossierOuvert.etat} />
-                <button className="btn-secondary btn-sm" onClick={() => setEdition(true)}>
-                  <Icon name="pencil" size={14} />
-                  Modifier les informations
-                </button>
+                <span className="flex gap-2">
+                  <button className="btn-secondary btn-sm" onClick={() => setEdition(true)}>
+                    <Icon name="pencil" size={14} />
+                    Modifier les informations
+                  </button>
+                  {profile?.role === "admin" && (
+                    <button
+                      className="btn-danger btn-sm"
+                      title="Suppression définitive, tracée dans le journal de l'admin"
+                      onClick={async () => {
+                        if (await supprimerDossierAvecTrace(supabase, dossierOuvert)) {
+                          setDossierOuvert(null);
+                          chargerDossiers();
+                        }
+                      }}
+                    >
+                      <Icon name="x" size={14} />
+                      Supprimer
+                    </button>
+                  )}
+                </span>
               </div>
               <p className="eyebrow mb-2">Bénéficiaire</p>
               <div className="mb-6">

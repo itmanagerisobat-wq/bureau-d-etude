@@ -16,6 +16,7 @@ import UndoToast from "@/components/ui/UndoToast";
 import { gardePage } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
 import { useValidateurActif } from "@/lib/useValidateurActif";
+import { supprimerDossierAvecTrace } from "@/lib/suppressionDossier";
 import { formatDate, formatDuree, S, STATUTS_MANUELS, TYPES_RETOUR, ETATS, rangsModifs } from "@/lib/constants";
 import { couleurEtat } from "@/lib/couleurs";
 import { enregistrerEvenement, annulerAction, instantane } from "@/lib/actions";
@@ -173,21 +174,35 @@ export default function QualitePage() {
   }
 
   const nomsValidateurs = (validateurs || []).map((v) => v.nom);
-  const dansListe = (n) => !!n && nomsValidateurs.some((v) => v.toLowerCase() === String(n).trim().toLowerCase());
   const graphie = (n) => nomsValidateurs.find((v) => v.toLowerCase() === String(n).trim().toLowerCase()) || String(n || "").trim();
   // Le compte connecté est-il lui-même un membre de la Qualité ? (sinon on demande « Audité par »)
   const qualiteConnecte = profile?.role === "qualite" && !!nomActif;
+  // Un Responsable valide à son propre nom, sans faire partie de l'équipe Qualité
+  const estResponsable = profile?.role === "admin" && profile?.fonction === "Responsable" && !!profile?.nom_complet;
   // « Audité par » proposé : la personne connectée (Qualité), sinon le choix de l'admin, sinon celui qui a le dossier en contrôle
-  const auditeurPour = (d) => (qualiteConnecte ? graphie(nomActif) : choixAudit[d?.id] || d?.pris_en_charge_par || auditeurAdmin || "");
+  const auditeurPour = (d) =>
+    qualiteConnecte
+      ? graphie(nomActif)
+      : estResponsable
+        ? profile.nom_complet.trim()
+        : choixAudit[d?.id] || d?.pris_en_charge_par || auditeurAdmin || "";
   const choixAuditeurs = (d) =>
     [...new Set([...nomsValidateurs, d?.pris_en_charge_par, auditeurAdmin].filter(Boolean).map((n) => graphie(n)))].sort((a, b) => a.localeCompare(b));
 
   async function valider(d) {
-    const auditeur = auditeurPour(d);
+    let auditeur = auditeurPour(d);
     if (!auditeur) return alert("Choisis d'abord « Audité par ».");
-    // « Audité par » doit exister dans la liste du service Qualité (contrainte en base) : on l'ajoute si besoin
-    if (!dansListe(auditeur)) {
-      const { error } = await supabase.rpc("fn_import_referentiels_v2", { p_validateurs: [auditeur] });
+    // « Audité par » doit exister dans la liste du service Qualité (contrainte en base, majuscules comprises) :
+    // on reprend l'orthographe enregistrée, ou on ajoute le nom s'il manque
+    const { data: existant } = await supabase.from("parametres_validateurs").select("nom").ilike("nom", auditeur.replace(/[%_]/g, "")).limit(1);
+    if (existant?.length) {
+      auditeur = existant[0].nom;
+    } else {
+      // Responsable : nom enregistré mais désactivé, pour qu'il n'apparaisse pas dans la liste de l'équipe Qualité
+      const { error } = await supabase.rpc(
+        "fn_import_referentiels_v2",
+        estResponsable ? { p_validateurs_inactifs: [auditeur] } : { p_validateurs: [auditeur] }
+      );
       if (error) return alert(`« ${auditeur} » n'est pas dans la liste Service qualité (Paramètres → Listes) et n'a pas pu y être ajouté : ${error.message}`);
     }
     return appliquer(
@@ -420,7 +435,12 @@ export default function QualitePage() {
             )}
             {(d.etat === S.A_CONTROLER || d.etat === S.VERIF) && (
               <>
-                {!qualiteConnecte && (
+                {estResponsable && (
+                  <span className="text-xs text-ink/55" title="Le dossier sera enregistré « Audité par » à votre nom, en tant que Responsable">
+                    Audité par <strong className="capitalize">{profile.nom_complet}</strong> (Responsable)
+                  </span>
+                )}
+                {!qualiteConnecte && !estResponsable && (
                   <select
                     className={`input input-sm w-44 ${auditeurPour(d) ? "" : "border-isoRed/60"}`}
                     value={auditeurPour(d)}
@@ -573,6 +593,21 @@ export default function QualitePage() {
                 {s === "en pause" ? "En pause" : s === "Annulé" ? "Annuler le dossier" : ETATS[s]?.court || s}
               </button>
             ))}
+            {profile?.role === "admin" && (
+              <button
+                className="btn-ghost btn-xs text-isoRed hover:bg-isoRed-light ml-auto"
+                title="Suppression définitive, tracée dans le journal de l'admin"
+                onClick={async () => {
+                  if (await supprimerDossierAvecTrace(supabase, d)) {
+                    fermerPanneau();
+                    chargerDossiers();
+                  }
+                }}
+              >
+                <Icon name="x" size={13} />
+                Supprimer le dossier
+              </button>
+            )}
           </div>
         </div>
       </div>
