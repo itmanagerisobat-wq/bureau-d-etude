@@ -513,7 +513,7 @@ export default function QualitePage() {
                 <label className="label">{d.ingenieur ? "Réassigner à" : "Assigner à"}</label>
                 <select className="input" value={assignation} onChange={(e) => setAssignation(e.target.value)}>
                   <option value="">Choisir un ingénieur…</option>
-                  {options.ingenieurs?.map((i) => (
+                  {(options.ingenieursAssignables || options.ingenieurs)?.map((i) => (
                     <option key={i} value={i}>
                       {i}
                       {equipeDuClient(d.client, options.equipes)
@@ -552,7 +552,7 @@ export default function QualitePage() {
                   <label className="label">Renvoyer à</label>
                   <select className="input" value={form.reassigner} onChange={(e) => setForm((f) => ({ ...f, reassigner: e.target.value }))}>
                     <option value="">{d.ingenieur ? `${d.ingenieur} (même ingénieur)` : "Choisir…"}</option>
-                    {options.ingenieurs?.filter((i) => i !== d.ingenieur).map((i) => (
+                    {(options.ingenieursAssignables || options.ingenieurs)?.filter((i) => i !== d.ingenieur).map((i) => (
                       <option key={i} value={i}>{i}</option>
                     ))}
                   </select>
@@ -812,6 +812,7 @@ export default function QualitePage() {
                         )}
                         {d.ingenieur_modif && <span className="block text-[11px] text-ink/50 capitalize">modif : {d.ingenieur_modif}</span>}
                         {d.hors_habilitation && d.ingenieur && !habilite(d.ingenieur, d.nom_operation) && <span className="block text-[11px] text-isoGold-dark">hors fiche habituelle</span>}
+                        {d.valide_par_ingenieur && <span className="block text-[11px] text-isoGreen-dark">corrigé et validé par l'ingénieur</span>}
                       </td>
                       <td className="text-ink/70 whitespace-nowrap">{d.nom_operation}</td>
                       <td>

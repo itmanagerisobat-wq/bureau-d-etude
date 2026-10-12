@@ -62,7 +62,7 @@ export default function DossierFormSaisie({ options, dossiersExistants, chargePa
 
   const habilite = (ing) => !form.nom_operation || (options.habilitations?.[ing] || []).includes(form.nom_operation);
   const horsHabilitation = form.mode === "assigner" && form.ingenieur && !habilite(form.ingenieur);
-  const habilites = (options.ingenieurs || []).filter(habilite);
+  const habilites = (options.ingenieursAssignables || options.ingenieurs || []).filter(habilite);
 
   async function envoyer(e) {
     e.preventDefault();
@@ -187,7 +187,7 @@ export default function DossierFormSaisie({ options, dossiersExistants, chargePa
             </label>
             <select className="input" value={form.ingenieur} onChange={(e) => champ("ingenieur", e.target.value)}>
               <option value="">Choisir…</option>
-              {options.ingenieurs?.map((o) => (
+              {(options.ingenieursAssignables || options.ingenieurs)?.map((o) => (
                 <option key={o} value={o}>
                   {o} — {chargeParIngenieur?.[o] ? `${chargeParIngenieur[o]} dossier(s) en cours/assignés` : "disponible"}
                   {form.nom_operation && !habilite(o) ? " · hors fiche habituelle" : ""}

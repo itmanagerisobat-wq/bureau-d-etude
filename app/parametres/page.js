@@ -66,6 +66,7 @@ export default function ParametresPage() {
   const [configId, setConfigId] = useState(null);
   const [rapportCfg, setRapportCfg] = useState(null); // colonnes V17 (null = migration non exécutée)
   const [rapportMsg, setRapportMsg] = useState("");
+  const [autoValid, setAutoValid] = useState(null); // null = migration V23 non exécutée
 
   const table = TABLES.find((t) => t.key === ongletActif);
 
@@ -95,6 +96,7 @@ export default function ParametresPage() {
         setDelaiMaxTraitement(config.delai_max_traitement_heures || 24);
         setConservation(config.conservation_fichiers_jours || 90);
         setConfigId(config.id);
+        if ("validation_ingenieur_apres_retour" in config) setAutoValid(config.validation_ingenieur_apres_retour);
         if ("grille_excellent" in config) {
           setRapportCfg({
             grille_excellent: config.grille_excellent,
@@ -796,6 +798,36 @@ export default function ParametresPage() {
                 </div>
               ),
             })}
+            <div className="card p-5 md:col-span-3">
+              <p className="card-title mb-1">
+                <Icon name="checkCircle" size={15} className="text-ink/40" />
+                Après un retour
+              </p>
+              {autoValid === null ? (
+                <p className="text-xs text-ink/55 mt-1">Exécutez la migration V23 dans Supabase pour régler ce point (activé par défaut).</p>
+              ) : (
+                <label className="flex items-start gap-3 mt-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={autoValid}
+                    disabled={!estAdmin}
+                    onChange={async (e) => {
+                      const v = e.target.checked;
+                      setAutoValid(v);
+                      if (configId) await supabase.from("parametres_config").update({ validation_ingenieur_apres_retour: v }).eq("id", configId);
+                    }}
+                  />
+                  <span className="text-sm">
+                    <span className="font-semibold">L'ingénieur valide lui-même un dossier corrigé après un retour</span>
+                    <span className="block text-xs text-ink/55">
+                      Bouton « Corrigé — je valide » dans Mes dossiers : le dossier passe Audité sans nouveau contrôle (« Audité par » = la personne de la
+                      Qualité qui l'avait contrôlé). Décoché : le dossier corrigé repasse par le contrôle.
+                    </span>
+                  </span>
+                </label>
+              )}
+            </div>
             <div className="card p-5 md:col-span-3">
               <p className="card-title mb-1">
                 <Icon name="shield" size={15} className="text-ink/40" />

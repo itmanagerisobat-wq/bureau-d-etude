@@ -57,6 +57,8 @@ export default function MesDossiersPage() {
   const changerDePersonne = estAdmin ? choix.changerDePersonne : undefined;
   const [ingenieursAvecPin, setIngenieursAvecPin] = useState([]);
   const [aModifier, setAModifier] = useState(null); // dossier envoyé au contrôle, encore modifiable
+  const [autoValidation, setAutoValidation] = useState(true); // réglage admin : validation par l'ingénieur après retour
+  const [fileManuelle, setFileManuelle] = useState(false); // distribution manuelle de la file
   const [dossiers, setDossiers] = useState([]);
   const [objectifsJour, setObjectifsJour] = useState([]);
   const [dossiersEquipeAujourdHui, setDossiersEquipeAujourdHui] = useState([]);
@@ -77,7 +79,11 @@ export default function MesDossiersPage() {
         supabase.from("parametres_config").select("*").limit(1).maybeSingle(),
       ]);
       setIngenieursAvecPin(ings || []);
-      if (config) setDelaiMaxHeures(config.delai_max_traitement_heures);
+      if (config) {
+        setDelaiMaxHeures(config.delai_max_traitement_heures);
+        setAutoValidation(config.validation_ingenieur_apres_retour !== false);
+        setFileManuelle(config.file_mode === "manuel");
+      }
     })();
   }, [profile]);
 
@@ -171,7 +177,11 @@ export default function MesDossiersPage() {
     const pris = Array.isArray(data) ? data[0] : data;
     setPrise({
       enCours: false,
-      message: pris ? "" : "Aucun dossier disponible pour tes fiches. La Qualité peut t'en assigner un à la main.",
+      message: pris
+        ? ""
+        : fileManuelle
+          ? "Distribution manuelle : aucun dossier ne t'est attribué pour l'instant."
+          : "Aucun dossier disponible pour tes fiches. La Qualité peut t'en assigner un à la main.",
     });
     chargerDossiers();
   }
@@ -214,6 +224,62 @@ export default function MesDossiersPage() {
     chargerDossiers();
   }
 
+  // Après un retour : l'ingénieur corrige et valide lui-même, sans repasser par le contrôle.
+  // « Audité par » reste la personne de la Qualité qui avait contrôlé le dossier.
+  async function validerApresRetour(d) {
+    const auditeur = d.pris_en_charge_par || d.valide_par;
+    if (!auditeur)
+      return alert("Impossible de valider toi-même : on ne sait pas qui a contrôlé ce dossier. Utilise « Terminé » pour l'envoyer au contrôle.");
+    if (!confirm(`Tu confirmes avoir corrigé « ${d.nom_dossier} » ?\nLe dossier sera validé directement (Audité par ${auditeur}), sans nouveau contrôle.`)) return;
+    const maintenant = new Date().toISOString();
+    const champs = { etat: S.VALIDE, date_soumission: maintenant, date_verification: maintenant, valide_par: auditeur, a_corriger: false };
+    let { error } = await supabase.from("dossiers").update({ ...champs, valide_par_ingenieur: true }).eq("id", d.id);
+    if (error && /valide_par_ingenieur/.test(error.message)) ({ error } = await supabase.from("dossiers").update(champs).eq("id", d.id));
+    if (error)
+      return alert(
+        /foreign key|valide_par/i.test(error.message)
+          ? `« ${auditeur} » n'est pas dans la liste Service qualité : utilise « Terminé » pour l'envoyer au contrôle.`
+          : "Action impossible : " + error.message
+      );
+    const evt = await enregistrerEvenement(supabase, d.id, "validation_ingenieur", { nom, cause: commentaire.trim() || null });
+    if (commentaire.trim()) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      await supabase.from("dossier_commentaires").insert({ dossier_id: d.id, auteur_id: user?.id, auteur_nom: nom, contenu: commentaire.trim() });
+    }
+    setCommentaire("");
+    memoriser(d, "Corrigé et validé", evt);
+    chargerDossiers();
+  }
+
+  // Pause : le dossier en cours est mis de côté (ex. pour traiter un dossier urgent)
+  async function mettreEnPause(d, silencieux = false) {
+    const motif = silencieux ? "Mis en pause pour un dossier urgent" : window.prompt("Pourquoi mettre ce dossier en pause ? (facultatif)", "");
+    if (motif === null) return false;
+    const { error } = await supabase.from("dossiers").update({ etat: "en pause", motif_statut: motif.trim() || null }).eq("id", d.id);
+    if (error) {
+      alert("Action impossible : " + error.message);
+      return false;
+    }
+    const evt = await enregistrerEvenement(supabase, d.id, "mise_en_pause", { nom, cause: motif.trim() || null });
+    memoriser(d, "Mis en pause", evt);
+    if (!silencieux) chargerDossiers();
+    return true;
+  }
+
+  // Dossier urgent : met en pause le dossier en cours et démarre l'urgent
+  async function passerALUrgent(urgent) {
+    if (enCours && !(await mettreEnPause(enCours, true))) return;
+    const { error } = await supabase
+      .from("dossiers")
+      .update({ etat: S.EN_COURS, date_acceptation: urgent.date_acceptation || new Date().toISOString() })
+      .eq("id", urgent.id);
+    if (error) return alert("Action impossible : " + error.message);
+    await enregistrerEvenement(supabase, urgent.id, "acceptation", { nom, cause: "Dossier urgent" });
+    chargerDossiers();
+  }
+
   async function reprendre(d) {
     if (enCours) return alert("Termine d'abord ton dossier en cours.");
     const { error } = await supabase
@@ -246,6 +312,9 @@ export default function MesDossiersPage() {
   const enRetour = dossiers.filter((d) => d.etat === S.ASSIGNE && d.a_corriger).sort(parPriorite);
   const aFaire = dossiers.filter((d) => d.etat === S.ASSIGNE && !d.a_corriger).sort(parPriorite);
   const maListe = [...enRetour, ...aFaire];
+  const enPause = dossiers.filter((d) => d.etat === "en pause");
+  // Urgents qui attendent alors qu'un autre dossier est en cours
+  const urgents = enCours ? dossiers.filter((d) => d.prioritaire && d.etat === S.ASSIGNE && d.id !== enCours.id) : [];
 
   async function majBeneficiaire(d, champs) {
     const { error } = await supabase.from("dossiers").update(champs).eq("id", d.id);
@@ -374,6 +443,23 @@ export default function MesDossiersPage() {
         ) : (
           <>
             {/* Carte principale : le dossier en cours, ou « Prendre le suivant » */}
+            {urgents.length > 0 && (
+              <section className="mb-6 rounded-card border border-isoRed/40 bg-isoRed-light px-5 py-4 flex flex-col gap-2">
+                {urgents.map((u) => (
+                  <div key={u.id} className="flex flex-wrap items-center gap-3">
+                    <Icon name="flame" size={18} className="text-isoRed" />
+                    <p className="flex-1 min-w-[220px] text-sm">
+                      <strong>Dossier urgent : {u.nom_dossier}</strong>
+                      <span className="text-ink/60"> · {u.nom_operation}</span>
+                    </p>
+                    <button className="btn-danger btn-sm" onClick={() => passerALUrgent(u)}>
+                      Mettre « {enCours?.nom_dossier} » en pause et commencer l'urgent
+                    </button>
+                  </div>
+                ))}
+              </section>
+            )}
+
             {enCours ? (
               <section className="card border-brand-300 ring-2 ring-brand-500/10 mb-8 overflow-hidden">
                 <div className="px-6 py-5 flex flex-wrap items-start justify-between gap-4 border-b border-line bg-brand-50/40">
@@ -457,6 +543,10 @@ export default function MesDossiersPage() {
                     value={commentaire}
                     onChange={(e) => setCommentaire(e.target.value)}
                   />
+                  <button className="btn-secondary" onClick={() => mettreEnPause(enCours)} title="Mettre ce dossier de côté (ex. pour traiter un dossier urgent)">
+                    <Icon name="clock" size={15} />
+                    Pause
+                  </button>
                   <button className="btn-secondary" onClick={() => mettreEnAttente(enCours)}>
                     <Icon name="clock" size={15} />
                     En attente d'info
@@ -469,6 +559,16 @@ export default function MesDossiersPage() {
                     <Icon name="send" size={15} />
                     Terminé → suivant
                   </button>
+                  {enCours.a_corriger && autoValidation && (
+                    <button
+                      className="btn-success"
+                      onClick={() => validerApresRetour(enCours)}
+                      title="Après un retour : tu as corrigé, tu valides toi-même sans renvoyer au contrôle"
+                    >
+                      <Icon name="checkCircle" size={15} />
+                      Corrigé — je valide
+                    </button>
+                  )}
                   <button className="btn-icon" title="Historique" onClick={() => setDossierHistorique(enCours)}>
                     <Icon name="history" size={16} />
                   </button>
@@ -490,6 +590,18 @@ export default function MesDossiersPage() {
                   {prise.enCours ? "Recherche…" : "Prendre le suivant"}
                 </button>
                 {prise.message && <p className="text-sm text-isoGold-dark">{prise.message}</p>}
+              </section>
+            )}
+
+            {enPause.length > 0 && (
+              <section className="mb-8">
+                <SectionTitle icone="clock" titre="En pause" compteur={enPause.length} ton="neutral" />
+                {listeSimple(enPause, (d) => (
+                  <button className="btn-secondary btn-sm" onClick={() => reprendre(d)} disabled={!!enCours} title={enCours ? "Termine ou mets en pause ton dossier en cours" : ""}>
+                    <Icon name="reset" size={13} />
+                    Reprendre
+                  </button>
+                ))}
               </section>
             )}
 

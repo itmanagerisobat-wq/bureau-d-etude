@@ -58,6 +58,10 @@ export default function SaisiePage() {
   const [assignation, setAssignation] = useState({}); // { [dossierId]: ingénieur choisi }
   const [derniereAction, setDerniereAction] = useState(null);
   const [message, setMessage] = useState(null);
+  // Distribution de la file : « auto » (les ingénieurs prennent eux-mêmes) ou « manuel » (attribution ici)
+  const [fileMode, setFileMode] = useState("auto");
+  const [config, setConfig] = useState(null);
+  const [distribution, setDistribution] = useState(false);
   const fichiers = useFichiers(supabase, !!profile);
   const celluleFichiers = (d, sansInserer = false) => (
     <td onClick={(e) => e.stopPropagation()}>
@@ -124,16 +128,45 @@ export default function SaisiePage() {
     chargerDossiers();
   }
 
-  async function attribuerAuto(d) {
-    const r = await attribuerAutomatiquement(supabase, d, options, nomTrace);
-    if (!r.ok) {
-      setMessage({ ton: "red", texte: r.erreur });
-      return;
+  useEffect(() => {
+    if (!profile) return;
+    (async () => {
+      const { data } = await supabase.from("parametres_config").select("*").order("id").limit(1).maybeSingle();
+      setConfig(data);
+      if (data?.file_mode) setFileMode(data.file_mode);
+    })();
+  }, [profile]);
+
+  async function changerMode(mode) {
+    if (!config || !("file_mode" in config)) return setMessage({ ton: "red", texte: "Exécutez la migration V24 dans Supabase pour enregistrer ce réglage." });
+    const avant = fileMode;
+    setFileMode(mode);
+    const { error } = await supabase.from("parametres_config").update({ file_mode: mode }).eq("id", config.id);
+    if (error) {
+      setFileMode(avant);
+      setMessage({ ton: "red", texte: "Réglage non enregistré : " + error.message });
     }
-    memoriser(d, `Attribué automatiquement à ${r.ingenieur}`, r.evenementId);
-    setMessage({ ton: "green", texte: `« ${d.nom_dossier} » → ${r.ingenieur} : ${r.raison}.` });
+  }
+
+  // Mode auto : attribue d'un coup tous les dossiers de la file à l'ingénieur le plus disponible
+  async function toutAttribuer() {
+    const liste = fileFiltree.filter((d) => d.nom_operation);
+    if (!liste.length) return;
+    if (!confirm(`Attribuer automatiquement les ${liste.length} dossier(s) de la file aux ingénieurs disponibles ?`)) return;
+    setDistribution(true);
+    let ok = 0;
+    const echecs = [];
+    for (const d of liste) {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await attribuerAutomatiquement(supabase, d, options, nomTrace);
+      if (r.ok) ok++;
+      else echecs.push(`${d.nom_dossier} : ${r.erreur}`);
+    }
+    setDistribution(false);
+    setMessage({ ton: echecs.length ? "red" : "green", texte: `${ok} dossier(s) attribué(s).${echecs.length ? ` Non attribués : ${echecs.slice(0, 5).join(" ; ")}` : ""}` });
     chargerDossiers();
   }
+
 
   useEffect(() => {
     if (!profile) return;
@@ -309,7 +342,24 @@ export default function SaisiePage() {
             compteur={fileFiltree.length !== file.length ? `${fileFiltree.length} / ${file.length}` : file.length}
             ton={file.length ? "brand" : "neutral"}
             actions={
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs font-semibold text-ink/50 uppercase tracking-wider">Distribution</span>
+                <div className="segmented" title="Réglage commun à toute l'équipe">
+                  <button data-active={fileMode === "auto"} onClick={() => changerMode("auto")}>
+                    <Icon name="users" size={13} />
+                    Automatique
+                  </button>
+                  <button data-active={fileMode === "manuel"} onClick={() => changerMode("manuel")}>
+                    <Icon name="user" size={13} />
+                    Manuelle
+                  </button>
+                </div>
+                {fileMode === "auto" && (
+                  <button onClick={toutAttribuer} className="btn-primary btn-sm" disabled={distribution || !fileFiltree.some((d) => d.nom_operation)}>
+                    <Icon name="send" size={14} />
+                    {distribution ? "Attribution…" : "Tout attribuer maintenant"}
+                  </button>
+                )}
                 <button onClick={() => setImportOuvert(true)} className="btn-secondary btn-sm">
                   <Icon name="upload" size={14} />
                   Importer Excel
@@ -322,8 +372,9 @@ export default function SaisiePage() {
             }
           />
           <p className="text-xs text-ink/50 mb-3">
-            Distribués automatiquement : chaque ingénieur qui clique « Terminé → suivant » reçoit le premier dossier de ses
-            fiches (prioritaires d'abord, puis les plus anciens).
+            {fileMode === "auto"
+              ? "Distribution automatique : chaque ingénieur qui clique « Prendre le suivant » ou « Terminé → suivant » reçoit le premier dossier de ses fiches (prioritaires d'abord, puis les plus anciens). « Tout attribuer maintenant » répartit tout de suite la file entre les ingénieurs disponibles."
+              : "Distribution manuelle : choisissez l'ingénieur de chaque dossier. Les ingénieurs ne prennent plus eux-mêmes dans la file : ils traitent uniquement ce qui leur est attribué."}
           </p>
 
           {message && (
@@ -383,23 +434,17 @@ export default function SaisiePage() {
                     </td>
                     {celluleFichiers(d)}
                     <td>
+                      {fileMode === "auto" ? (
+                        <span className="block text-right text-xs text-ink/45">automatique</span>
+                      ) : (
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          className="btn-secondary btn-xs"
-                          onClick={() => attribuerAuto(d)}
-                          disabled={!d.nom_operation}
-                          title={d.nom_operation ? "À l'ingénieur le plus disponible" : "Renseigne d'abord la fiche CEE"}
-                        >
-                          <Icon name="users" size={13} />
-                          Auto
-                        </button>
                         <select
                           className="input input-sm w-44"
                           value={assignation[d.id] || ""}
                           onChange={(e) => setAssignation((a) => ({ ...a, [d.id]: e.target.value }))}
                         >
                           <option value="">Choisir un ingénieur…</option>
-                          {options.ingenieurs.map((i) => (
+                          {(options.ingenieursAssignables || options.ingenieurs).map((i) => (
                             <option key={i} value={i}>
                               {i}
                               {occupes.has(i) ? " · occupé" : " · libre"}
@@ -417,6 +462,7 @@ export default function SaisiePage() {
                           Assigner
                         </button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}

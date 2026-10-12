@@ -26,7 +26,7 @@ export default function ListeIngenieurs({ supabase, options, onFermer }) {
 
   const equipesDe = (ing) => Object.entries(options.equipes || {}).filter(([, l]) => l.includes(ing)).map(([c]) => c);
 
-  const lignes = (options.ingenieurs || []).map((ing) => {
+  const lignes = (options.ingenieursAssignables || options.ingenieurs || []).map((ing) => {
     const siens = (ouverts || []).filter((d) => d.ingenieur === ing);
     const enCours = siens.find((d) => d.etat === S.EN_COURS);
     return {

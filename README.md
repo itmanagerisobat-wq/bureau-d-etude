@@ -2,6 +2,31 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.20 — distribution de la file automatique ou manuelle
+
+**Migration à exécuter :** `migration_workflow_v24.sql`.
+
+- **Saisie → File d'attente → Distribution « Automatique / Manuelle »** (réglage commun à toute l'équipe) :
+  - *Automatique* : plus de choix dossier par dossier ; les ingénieurs reçoivent les dossiers avec « Prendre le suivant » ;
+    bouton « Tout attribuer maintenant » pour répartir toute la file d'un coup entre les ingénieurs disponibles.
+  - *Manuelle* : on choisit l'ingénieur de chaque dossier ; les ingénieurs ne prennent plus eux-mêmes dans la file.
+- Les personnes de la Qualité, les Responsables et l'admin sont retirés des listes d'ingénieurs à qui attribuer un dossier
+  (Saisie, nouveau dossier, Qualité, attribution automatique, liste Ingénieurs, charge du tableau de bord).
+  Les statistiques et l'historique gardent tous les noms.
+
+## Version 3.19 — Bleu Hill, validation par l'ingénieur après retour, pause et dossier urgent
+
+**Migration à exécuter :** `migration_workflow_v23.sql`.
+
+- **Couleurs** : barre du haut au bleu du logo (Bleu Hill), fond de page légèrement bleuté. Boutons inchangés.
+- **Après un retour** : dans Mes dossiers, l'ingénieur qui a corrigé un dossier revenu en retour clique
+  « Corrigé — je valide » : le dossier passe Audité sans repasser par le contrôle (« Audité par » = la personne de la
+  Qualité qui l'avait contrôlé). Tracé dans l'historique et signalé dans Qualité (« corrigé et validé par l'ingénieur »).
+  Réglage admin dans Paramètres → Config SLA (activé par défaut).
+- **Pause** : bouton « Pause » sur le dossier en cours ; section « En pause » avec « Reprendre ».
+- **Dossier urgent** : si un dossier prioritaire (flamme) est attribué à un ingénieur qui a déjà un dossier en cours,
+  un bandeau rouge lui propose « Mettre … en pause et commencer l'urgent » (un clic).
+
 ## Version 3.18 — les Responsables peuvent valider
 
 - Un compte Responsable peut **Valider** un dossier dans Qualité : il est enregistré « Audité par » à son propre nom

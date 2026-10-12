@@ -160,7 +160,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="mb-6">
-          <ChargeParIngenieurTable ingenieurs={options.ingenieurs} dossiersEnCours={enCoursIngenieurs} />
+          <ChargeParIngenieurTable ingenieurs={options.ingenieursAssignables || options.ingenieurs} dossiersEnCours={enCoursIngenieurs} />
         </div>
 
         <div className="mb-6">

@@ -23,9 +23,9 @@ module.exports = {
         isoRed: { DEFAULT: "#D33A3A", dark: "#B02525", light: "#FDECEC" },
         isoGold: { DEFAULT: "#B7791F", dark: "#8F5E14", light: "#FDF3DC" },
         isoNavy: { DEFAULT: "#1F6FA8", dark: "#154A72", light: "#EEF5FB" },
-        night: { DEFAULT: "#0F2742", light: "#1D3A5C" }, // barre du haut : Bleu nuit
+        night: { DEFAULT: "#1F6FA8", light: "#4A8BBB" }, // barre du haut : Bleu Hill (bleu du logo)
         ink: "#13212F",
-        paper: "#F2F4F7",
+        paper: "#F2F6FA",
         line: "#E3E8EE",
       },
       fontFamily: {

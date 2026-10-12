@@ -53,13 +53,12 @@ export async function middleware(request) {
   }
 
   if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    // « fonction » n'existe qu'après la migration V18 : on se replie sur « role » seul si besoin
+    let { data: profile, error: errProfil } = await supabase.from("profiles").select("role, fonction").eq("id", user.id).single();
+    if (errProfil) ({ data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single());
 
     const role = profile?.role;
+
 
     if (ROUTES_ADMIN_ONLY.some((r) => path.startsWith(r)) && role !== "admin") {
       const url = request.nextUrl.clone();
