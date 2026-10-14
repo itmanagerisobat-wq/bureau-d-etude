@@ -2,6 +2,30 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.22 — suppression des dépôts par l'ingénieur, tableau de bord réorganisé
+
+**Migration à exécuter :** `migration_workflow_v27.sql`.
+
+- **Mes dossiers** : l'ingénieur peut supprimer ses propres livrables (×) tant que le dossier est en cours chez lui,
+  ou envoyé au contrôle mais pas encore pris par la Qualité. Les pièces reçues restent protégées.
+- **Tableau de bord** : l'encadré « Dossiers par agent » est remplacé par un filtre ingénieur dans
+  « Charge actuelle par ingénieur » (clic sur un nom ou choix dans la liste → tous ses dossiers, recherche, export).
+- Les accès aux graphiques (Évolution mensuelle, Par opération, Par client, Nouveaux vs Modifs) sont remontés en haut.
+
+## Version 3.21.2 — Paramètres → Listes : lecture plus robuste
+
+- Si la base refuse la lecture complète d'une liste, l'application relit seulement les colonnes utiles ;
+  en cas d'échec, l'erreur exacte s'affiche au lieu de « Liste vide ».
+
+## Version 3.21.1 — correctif « Liste vide » dans Paramètres
+
+**Migration à exécuter :** `migration_workflow_v26.sql`.
+
+- Si la sécurité RLS a été activée sur les tables de listes sans règle de lecture, l'application ne voyait plus
+  les ingénieurs, le service qualité, etc. (« Liste vide », listes déroulantes vides, « Audité par » vide).
+  La V26 rétablit la lecture pour les utilisateurs connectés et l'écriture pour l'admin et la Qualité. Aucune donnée
+  n'est modifiée. Le script affiche à la fin le nombre réel de lignes de chaque liste.
+
 ## Version 3.21 — colonne Client, filtre Date, messagerie sans discussions vides, listes depuis les comptes
 
 **Migration à exécuter :** `migration_workflow_v25.sql`.
