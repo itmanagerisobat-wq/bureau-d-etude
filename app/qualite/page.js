@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import HistoriqueComplet from "@/components/HistoriqueComplet";
 import FicheBeneficiaire from "@/components/FicheBeneficiaire";
 import FichiersDossier from "@/components/FichiersDossier";
+import EchangesDossier, { ajouterEchange, resumeEchanges, PastilleEchanges } from "@/components/EchangesDossier";
 import CelluleFichiers, { useFichiers } from "@/components/CelluleFichiers";
 import { exporterDossiers } from "@/lib/exportDossiers";
 import { StatutDossier } from "@/components/DossierTable";
@@ -22,7 +23,8 @@ import { couleurEtat } from "@/lib/couleurs";
 import { enregistrerEvenement, annulerAction, instantane } from "@/lib/actions";
 import { attribuerAutomatiquement, equipeDuClient } from "@/lib/dispatch";
 
-const ETATS_CIRCUIT = [S.FILE, S.ASSIGNE, S.EN_COURS, S.ATTENTE_INFO, S.A_CONTROLER, S.VERIF, S.VALIDE];
+const ETATS_CIRCUIT = [S.FILE, S.ASSIGNE, S.EN_COURS, S.ATTENTE_INFO, S.A_CONTROLER, S.VERIF, S.VALIDE, S.PAS_DE_MODIF];
+const ETATS_TERMINES = [S.VALIDE, "Dossier vérifié", S.PAS_DE_MODIF, "Annulé", "Suspendue"];
 
 /** Depuis quand le dossier est dans son étape actuelle (heures). */
 function heuresDansEtape(d) {
@@ -56,6 +58,8 @@ export default function QualitePage() {
   const [periode, setPeriode] = useState({ mode: "tout", jour: new Date().toISOString().slice(0, 10), mois: new Date().toISOString().slice(0, 7) });
   const [form, setForm] = useState({ cause: "", commentaire: "", reassigner: "", bibliotheque: false });
   const [assignation, setAssignation] = useState("");
+  const [noteAssignation, setNoteAssignation] = useState(""); // message pour l'ingénieur à l'attribution
+  const [resumes, setResumes] = useState({}); // échanges par dossier (pastilles)
   const [dossierHistorique, setDossierHistorique] = useState(null);
   const [derniereAction, setDerniereAction] = useState(null);
   const [filtre, setFiltre] = useState("tous");
@@ -86,6 +90,7 @@ export default function QualitePage() {
       .order("date", { ascending: false })
       .limit(3000);
     setDossiers(data || []);
+    setResumes(await resumeEchanges(supabase, (data || []).filter((d) => !ETATS_TERMINES.includes(d.etat)).map((d) => d.id)));
   }
 
   useEffect(() => {
@@ -113,6 +118,7 @@ export default function QualitePage() {
     setTypeRetour(null);
     setForm({ cause: "", commentaire: "", reassigner: "", bibliotheque: false });
     setAssignation("");
+    setNoteAssignation("");
   }
 
   function memoriser(d, libelle, evenementId, retourId) {
@@ -142,14 +148,24 @@ export default function QualitePage() {
 
   const habilite = (ing, op) => (options.habilitations?.[ing] || []).includes(op);
 
-  function assigner(d, ing) {
+  async function assigner(d, ing) {
     if (!ing) return;
-    return appliquer(
+    const note = noteAssignation.trim();
+    const ok = await appliquer(
       d,
-      { etat: S.ASSIGNE, ingenieur: ing, date_assignation: new Date().toISOString(), hors_habilitation: !habilite(ing, d.nom_operation) },
+      {
+        etat: S.ASSIGNE,
+        ingenieur: ing,
+        // Dossier de modif réassigné : le nouvel ingénieur devient aussi l'ingénieur de modif (il peut déposer et envoyer)
+        ...(d.ingenieur_modif ? { ingenieur_modif: ing } : {}),
+        date_assignation: new Date().toISOString(),
+        hors_habilitation: !habilite(ing, d.nom_operation),
+      },
       `Assigné à ${ing}`,
-      { type: d.ingenieur ? "reassignation" : "assignation", cause: `→ ${ing}` }
+      { type: d.ingenieur ? "reassignation" : "assignation", cause: `→ ${ing}` + (note ? ` — ${note}` : "") }
     );
+    if (ok && note) await ajouterEchange(supabase, d.id, nomTrace || profile?.nom_complet, `Pour ${ing} : ${note}`);
+    return ok;
   }
 
   async function attribuerAuto(d) {
@@ -213,7 +229,7 @@ export default function QualitePage() {
     );
   }
 
-  function enregistrerRetour(d) {
+  async function enregistrerRetour(d) {
     if (!form.cause) return alert("Précise la cause du retour.");
     const type = typeRetour; // interne | qualite | client
     const ing = form.reassigner || d.ingenieur;
@@ -231,7 +247,8 @@ export default function QualitePage() {
         ? { retour_client: true, cause_retour_client: form.cause, date_retour_client: maintenant.slice(0, 10) }
         : { retour_interne: true, cause_retour_interne: form.cause }),
     };
-    return appliquer(
+    const message = `${TYPES_RETOUR[type].libelle} — ${form.cause}${form.commentaire ? ` : ${form.commentaire}` : ""}`;
+    const ok = await appliquer(
       d,
       champs,
       `${TYPES_RETOUR[type].libelle} enregistré`,
@@ -251,6 +268,8 @@ export default function QualitePage() {
         explication: form.bibliotheque ? form.commentaire || null : null,
       }
     );
+    if (ok) await ajouterEchange(supabase, d.id, nomTrace || profile?.nom_complet, message);
+    return ok;
   }
 
   function changerStatutManuel(d, statut) {
@@ -343,6 +362,7 @@ export default function QualitePage() {
     { cle: "verification", libelle: "En vérification Q", couleur: couleurEtat(S.VERIF), test: (d) => d.etat === S.VERIF },
     { cle: "retour", libelle: "Retour", couleur: "#C2410C", test: estRetour },
     { cle: "audites", libelle: "Audité", couleur: couleurEtat(S.VALIDE), test: (d) => [S.VALIDE, "Dossier vérifié"].includes(d.etat) },
+    { cle: "pasDeModif", libelle: "Pas de modif", couleur: couleurEtat(S.PAS_DE_MODIF), test: (d) => d.etat === S.PAS_DE_MODIF },
     { cle: "annules", libelle: "Annulé", couleur: couleurEtat("Annulé"), test: (d) => ["Annulé", "Suspendue"].includes(d.etat) },
     { cle: "pause", libelle: "En pause", couleur: couleurEtat("en pause"), test: (d) => d.etat === "en pause", discret: true },
     // Dossiers contrôlés par la personne connectée (pris en charge ou audités par elle)
@@ -392,8 +412,8 @@ export default function QualitePage() {
     );
 
   function panneauAction(d) {
-    const peutAssigner = [S.FILE, S.ASSIGNE, S.ATTENTE_INFO].includes(d.etat) || STATUTS_MANUELS.includes(d.etat);
-    const peutRetour = [S.A_CONTROLER, S.VERIF, S.VALIDE].includes(d.etat);
+    const peutAssigner = [S.FILE, S.ASSIGNE, S.EN_COURS, S.ATTENTE_INFO].includes(d.etat) || STATUTS_MANUELS.includes(d.etat);
+    const peutRetour = [S.A_CONTROLER, S.VERIF, S.VALIDE, S.PAS_DE_MODIF].includes(d.etat);
     return (
       <div className="grid lg:grid-cols-[1fr_1.2fr] gap-4 py-4">
         <div className="flex flex-col gap-2">
@@ -413,9 +433,21 @@ export default function QualitePage() {
           />
           {d.motif_statut && (
             <p className="text-xs text-ink/60">
-              <strong>Motif :</strong> {d.motif_statut}
+              <strong>{d.etat === S.PAS_DE_MODIF ? "Pas de modif — explication de l'ingénieur :" : "Motif :"}</strong> {d.motif_statut}
             </p>
           )}
+          <p className="eyebrow mt-2 flex items-center gap-1.5">
+            <Icon name="message" size={12} />
+            Échanges avec l'ingénieur
+          </p>
+          <EchangesDossier
+            key={"e" + d.id}
+            supabase={supabase}
+            dossier={d}
+            auteur={nomTrace || profile?.nom_complet}
+            compact
+            onChange={() => resumeEchanges(supabase, [d.id]).then((r) => setResumes((x) => ({ ...x, ...r })))}
+          />
         </div>
 
         <div className="flex flex-col gap-3">
@@ -472,7 +504,7 @@ export default function QualitePage() {
                 </button>
               </>
             )}
-            {d.etat === S.VALIDE && (
+            {[S.VALIDE, S.PAS_DE_MODIF].includes(d.etat) && (
               <div className="segmented">
                 <button data-active={typeRetour === "qualite"} onClick={() => setTypeRetour("qualite")} title={TYPES_RETOUR.qualite.aide}>
                   Retour qualité
@@ -528,9 +560,23 @@ export default function QualitePage() {
                   ))}
                 </select>
               </div>
+              <div className="field flex-[2] min-w-[220px]">
+                <label className="label">Message pour l'ingénieur (facultatif)</label>
+                <input
+                  className="input"
+                  placeholder="Consignes, précisions…"
+                  value={noteAssignation}
+                  onChange={(e) => setNoteAssignation(e.target.value)}
+                />
+              </div>
               <button className="btn-primary btn-sm h-9" disabled={!assignation} onClick={() => assigner(d, assignation)}>
                 Assigner
               </button>
+              {d.etat === S.EN_COURS && (
+                <p className="w-full text-xs text-isoGold-dark">
+                  Dossier en cours chez {d.ingenieur_modif || d.ingenieur} : en le réassignant, il passe « À faire » chez le nouvel ingénieur.
+                </p>
+              )}
             </div>
           )}
 
@@ -799,6 +845,7 @@ export default function QualitePage() {
                             </span>
                           )}
                           {d.nb_retours >= 2 && <span className="badge badge-red">{d.nb_retours} retours</span>}
+                          <PastilleEchanges resume={resumes[d.id]} de={[d.ingenieur, d.ingenieur_modif]} />
                         </span>
                         {d.beneficiaire_nom && <span className="block text-xs text-ink/50">{d.beneficiaire_nom}</span>}
                       </td>

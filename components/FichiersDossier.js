@@ -109,10 +109,22 @@ export default function FichiersDossier({ supabase, dossier, auteur, peutDeposer
     if (err) alert(err);
   }
 
+  // peutSupprimer : true/false, ou une fonction (fichier) => booléen (ex. l'ingénieur : ses livrables seulement)
+  const supprimable = (f) => (typeof peutSupprimer === "function" ? peutSupprimer(f) : !!peutSupprimer);
+
   async function supprimer(f) {
     if (!confirm(`Supprimer « ${f.nom_fichier} » ?`)) return;
+    // Le registre d'abord : si la suppression est refusée, le fichier reste intact
+    const { data, error } = await supabase.from("dossier_fichiers").delete().eq("id", f.id).select("id");
+    if (error || !data?.length) {
+      alert(
+        error
+          ? "Suppression impossible : " + error.message
+          : "Suppression refusée : le dossier a peut-être déjà été pris en contrôle par la Qualité (ou la migration V27 n'est pas exécutée)."
+      );
+      return;
+    }
     await supabase.storage.from(BUCKET).remove([f.chemin]);
-    await supabase.from("dossier_fichiers").delete().eq("id", f.id);
     charger();
     onChange?.();
   }
@@ -176,7 +188,7 @@ export default function FichiersDossier({ supabase, dossier, auteur, peutDeposer
                 <button className="btn-icon w-7 h-7" onClick={() => telecharger(f)} aria-label="Télécharger">
                   <Icon name="download" size={14} />
                 </button>
-                {peutSupprimer && (
+                {supprimable(f) && (
                   <button className="btn-icon w-7 h-7 hover:text-isoRed" onClick={() => supprimer(f)} aria-label="Supprimer">
                     <Icon name="x" size={14} />
                   </button>

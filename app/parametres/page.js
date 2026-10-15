@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Navbar from "@/components/Navbar";
 import { useAppData } from "@/lib/useAppData";
 import GestionComptes from "@/components/GestionComptes";
@@ -51,7 +51,10 @@ export default function ParametresPage() {
   const [habs, setHabs] = useState(null); // Set "ingenieur|operation"
   const [equipes, setEquipes] = useState(null); // Set "client|ingenieur"
   const [ongletActif, setOngletActif] = useState("parametres_operations");
+  const ongletActifRef = useRef(ongletActif);
+  ongletActifRef.current = ongletActif;
   const [lignes, setLignes] = useState([]);
+  const [erreurListe, setErreurListe] = useState("");
   const [nouveau, setNouveau] = useState("");
   const [objectifs, setObjectifs] = useState([]);
   const [ingenieurs, setIngenieurs] = useState([]);
@@ -71,8 +74,23 @@ export default function ParametresPage() {
   const table = TABLES.find((t) => t.key === ongletActif);
 
   async function chargerListe() {
-    const { data } = await supabase.from(ongletActif).select("*").order(table.champ);
-    setLignes(data || []);
+    const cible = ongletActif;
+    // Lecture « tout » puis, si la base refuse, uniquement les colonnes utiles (id, nom, actif)
+    let derniere = null;
+    for (const colonnes of ["*", `id, ${table.champ}, actif`, `id, ${table.champ}`]) {
+      // eslint-disable-next-line no-await-in-loop
+      const { data, error } = await supabase.from(cible).select(colonnes).order(table.champ);
+      if (!error) {
+        if (cible !== ongletActifRef.current) return; // l'utilisateur a changé d'onglet entre-temps
+        setErreurListe("");
+        setLignes(data || []);
+        return;
+      }
+      derniere = error;
+    }
+    if (cible !== ongletActifRef.current) return;
+    setErreurListe(derniere?.message || "erreur inconnue");
+    setLignes([]);
   }
 
   useEffect(() => {
@@ -486,7 +504,10 @@ export default function ParametresPage() {
                     </div>
                   </li>
                 ))}
-                {lignes.length === 0 && <EmptyState texte="Liste vide." compact />}
+                {erreurListe && <p className="px-4 py-3 text-sm text-isoRed-dark">Lecture impossible : {erreurListe}</p>}
+                {lignes.length === 0 && !erreurListe && (
+                  <EmptyState texte="Liste vide. Si des dossiers portent pourtant des noms, exécutez la migration V26 dans Supabase (droits de lecture des listes)." compact />
+                )}
               </ul>
             </div>
           </div>

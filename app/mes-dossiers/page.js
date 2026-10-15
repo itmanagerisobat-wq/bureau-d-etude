@@ -8,6 +8,7 @@ import HistoriqueComplet from "@/components/HistoriqueComplet";
 import VueCalendrier from "@/components/VueCalendrier";
 import FicheBeneficiaire from "@/components/FicheBeneficiaire";
 import FichiersDossier from "@/components/FichiersDossier";
+import EchangesDossier, { ajouterEchange, resumeEchanges, PastilleEchanges } from "@/components/EchangesDossier";
 import { StatutDossier } from "@/components/DossierTable";
 import PageHeader, { SectionTitle } from "@/components/ui/PageHeader";
 import StatutBadge from "@/components/ui/StatutBadge";
@@ -70,6 +71,8 @@ export default function MesDossiersPage() {
   const [dernierRetour, setDernierRetour] = useState(null);
   const [erreursFiche, setErreursFiche] = useState([]);
   const [prise, setPrise] = useState({ enCours: false, message: "" });
+  const [ouvert, setOuvert] = useState(null); // dossier ouvert depuis une liste (pièces + échanges)
+  const [resumes, setResumes] = useState({}); // échanges par dossier (pastilles)
 
   useEffect(() => {
     if (!profile) return;
@@ -89,13 +92,24 @@ export default function MesDossiersPage() {
 
   async function chargerDossiers() {
     if (!nom) return;
+    // Ingénieur du dossier OU ingénieur de modif (dossier réassigné), sans tenir compte des majuscules
+    const q = `"${String(nom).trim().replace(/["\\%]/g, "")}"`;
     const { data } = await supabase
       .from("dossiers")
       .select("*")
-      .eq("ingenieur", nom)
+      .or(`ingenieur.ilike.${q},ingenieur_modif.ilike.${q}`)
       .order("date", { ascending: false })
       .limit(300);
-    setDossiers(data || []);
+    const lc = (v) => String(v || "").trim().toLowerCase();
+    const moi = lc(nom);
+    const TERMINES = [S.VALIDE, "Dossier vérifié", S.PAS_DE_MODIF, "Annulé", "Suspendue"];
+    // Dossier en circuit : il appartient à celui qui doit le traiter (l'ingénieur de modif s'il y en a un).
+    // Dossier terminé : visible par les deux (historique).
+    const miens = (data || []).filter((d) =>
+      TERMINES.includes(d.etat) ? lc(d.ingenieur) === moi || lc(d.ingenieur_modif) === moi : (lc(d.ingenieur_modif) || lc(d.ingenieur)) === moi
+    );
+    setDossiers(miens);
+    setResumes(await resumeEchanges(supabase, miens.filter((d) => !TERMINES.includes(d.etat)).map((d) => d.id)));
   }
 
   async function chargerProgressionEquipe() {
@@ -187,23 +201,13 @@ export default function MesDossiersPage() {
   }
 
   async function terminer(d, suivant = false) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     const { error } = await supabase
       .from("dossiers")
       .update({ etat: S.A_CONTROLER, date_soumission: new Date().toISOString(), a_corriger: false })
       .eq("id", d.id);
     if (error) return alert("Action impossible : " + error.message);
     const evt = await enregistrerEvenement(supabase, d.id, "soumission_verification", { nom });
-    if (commentaire.trim()) {
-      await supabase.from("dossier_commentaires").insert({
-        dossier_id: d.id,
-        auteur_id: user?.id,
-        auteur_nom: nom,
-        contenu: commentaire.trim(),
-      });
-    }
+    if (commentaire.trim()) await ajouterEchange(supabase, d.id, nom, commentaire);
     memoriser(d, "Envoyé au contrôle", evt);
     setCommentaire("");
     if (suivant) {
@@ -242,12 +246,7 @@ export default function MesDossiersPage() {
           : "Action impossible : " + error.message
       );
     const evt = await enregistrerEvenement(supabase, d.id, "validation_ingenieur", { nom, cause: commentaire.trim() || null });
-    if (commentaire.trim()) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      await supabase.from("dossier_commentaires").insert({ dossier_id: d.id, auteur_id: user?.id, auteur_nom: nom, contenu: commentaire.trim() });
-    }
+    if (commentaire.trim()) await ajouterEchange(supabase, d.id, nom, commentaire);
     setCommentaire("");
     memoriser(d, "Corrigé et validé", evt);
     chargerDossiers();
@@ -277,6 +276,50 @@ export default function MesDossiersPage() {
       .eq("id", urgent.id);
     if (error) return alert("Action impossible : " + error.message);
     await enregistrerEvenement(supabase, urgent.id, "acceptation", { nom, cause: "Dossier urgent" });
+    chargerDossiers();
+  }
+
+  // Après un retour (souvent un retour client) : la modification demandée est déjà faite.
+  // Le dossier passe « Pas de modif à faire », avec l'explication de l'ingénieur (visible par la Qualité).
+  async function pasDeModif(d, texteSaisi = "") {
+    const explication = String(texteSaisi || "").trim() || window.prompt("Pourquoi aucune modification n'est nécessaire ? (obligatoire)", "");
+    if (!explication || !explication.trim()) return;
+    const maintenant = new Date().toISOString();
+    const { error } = await supabase
+      .from("dossiers")
+      .update({ etat: S.PAS_DE_MODIF, a_corriger: false, motif_statut: explication.trim(), date_soumission: maintenant })
+      .eq("id", d.id);
+    if (error)
+      return alert(
+        /foreign key|parametres_etats/i.test(error.message)
+          ? "Le statut « Pas de modif à faire » n'existe pas encore : l'administrateur doit exécuter la migration V28."
+          : "Action impossible : " + error.message
+      );
+    const evt = await enregistrerEvenement(supabase, d.id, "pas_de_modif", { nom, cause: explication.trim() });
+    await ajouterEchange(supabase, d.id, nom, `Pas de modif à faire : ${explication.trim()}`);
+    if (texteSaisi) setCommentaire("");
+    memoriser(d, "Pas de modif à faire", evt);
+    setOuvert(null);
+    chargerDossiers();
+  }
+
+  // Commencer un dossier précis de sa liste (sans passer par « Prendre le suivant »)
+  async function commencer(d) {
+    if (enCours) return alert("Termine ou mets en pause ton dossier en cours d'abord.");
+    const { data, error } = await supabase
+      .from("dossiers")
+      .update({ etat: S.EN_COURS, motif_statut: null, date_acceptation: new Date().toISOString() })
+      .eq("id", d.id)
+      .eq("etat", S.ASSIGNE)
+      .select("id");
+    if (error) return alert("Action impossible : " + error.message);
+    if (!data?.length) {
+      chargerDossiers();
+      return alert("Ce dossier a changé de statut entre-temps.");
+    }
+    const evt = await enregistrerEvenement(supabase, d.id, "acceptation", { nom });
+    memoriser(d, "Dossier commencé", evt);
+    setOuvert(null);
     chargerDossiers();
   }
 
@@ -360,7 +403,7 @@ export default function MesDossiersPage() {
 
   const attenteInfo = dossiers.filter((d) => d.etat === S.ATTENTE_INFO);
   const auControle = dossiers.filter((d) => [S.A_CONTROLER, "En cours de vérification"].includes(d.etat));
-  const traites = dossiers.filter((d) => [S.VALIDE, "Dossier vérifié"].includes(d.etat));
+  const traites = dossiers.filter((d) => [S.VALIDE, "Dossier vérifié", S.PAS_DE_MODIF].includes(d.etat));
 
   // Progression du jour, par opération (équipe + perso)
   const traitesAujourdHui = dossiers.filter((d) => d.date === AUJOURD_HUI_ISO);
@@ -400,8 +443,13 @@ export default function MesDossiersPage() {
                 {[d.nom_operation, d.beneficiaire_nom, d.motif_statut && `Motif : ${d.motif_statut}`].filter(Boolean).join(" · ")}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <PastilleEchanges resume={resumes[d.id]} moi={nom} />
               {action ? action(d) : <StatutDossier dossier={d} />}
+              <button className="btn-ghost btn-sm" onClick={() => setOuvert(d)} title="Pièces, dépôt des livrables et échanges avec la Qualité">
+                <Icon name="folder" size={13} />
+                Ouvrir
+              </button>
             </div>
           </div>
         ))}
@@ -506,9 +554,16 @@ export default function MesDossiersPage() {
                         auteur={nom}
                         peutDeposerPieces={false}
                         peutDeposerLivrables
-                        peutSupprimer={false}
+                        peutSupprimer={(f) => f.categorie === "livrable"}
                         compact
                       />
+                    </div>
+                    <div>
+                      <p className="eyebrow mb-2 flex items-center gap-1.5">
+                        <Icon name="message" size={12} />
+                        Échanges avec la Qualité
+                      </p>
+                      <EchangesDossier key={"e" + enCours.id} supabase={supabase} dossier={enCours} auteur={nom} compact />
                     </div>
                   </div>
 
@@ -539,7 +594,7 @@ export default function MesDossiersPage() {
                 <div className="px-6 py-4 border-t border-line bg-paper/60 flex flex-wrap items-center gap-2">
                   <input
                     className="input flex-1 min-w-[220px]"
-                    placeholder="Commentaire pour la Qualité (optionnel)"
+                    placeholder="Commentaire pour la Qualité, joint à l'envoi (optionnel)"
                     value={commentaire}
                     onChange={(e) => setCommentaire(e.target.value)}
                   />
@@ -559,6 +614,16 @@ export default function MesDossiersPage() {
                     <Icon name="send" size={15} />
                     Terminé → suivant
                   </button>
+                  {enCours.a_corriger && (
+                    <button
+                      className="btn-secondary"
+                      onClick={() => pasDeModif(enCours, commentaire)}
+                      title="La modification demandée est déjà faite : le dossier passe « Pas de modif à faire » (le commentaire saisi sert d'explication)"
+                    >
+                      <Icon name="checkCircle" size={15} />
+                      Pas de modif à faire
+                    </button>
+                  )}
                   {enCours.a_corriger && autoValidation && (
                     <button
                       className="btn-success"
@@ -715,6 +780,7 @@ export default function MesDossiersPage() {
                         <td className="whitespace-nowrap text-ink/60 tabular">{formatDate(d.date)}</td>
                         <td>
                           <span className="font-semibold">{d.nom_dossier}</span>
+                          {d.etat === S.PAS_DE_MODIF && <span className="badge badge-green ml-1.5">Pas de modif</span>}
                           {d.beneficiaire_nom && <span className="block text-xs text-ink/50">{d.beneficiaire_nom}</span>}
                         </td>
                         <td className="text-ink/70">{d.nom_operation}</td>
@@ -746,6 +812,87 @@ export default function MesDossiersPage() {
         <HistoriqueComplet supabase={supabase} dossier={dossierHistorique} onFermer={() => setDossierHistorique(null)} />
       )}
 
+      {ouvert && (
+        <Modal
+          titre={ouvert.nom_dossier}
+          sousTitre={[ouvert.nom_operation, ouvert.client, ouvert.a_corriger ? "en retour" : null].filter(Boolean).join(" · ")}
+          onFermer={() => {
+            setOuvert(null);
+            chargerDossiers();
+          }}
+          taille="lg"
+        >
+          {(() => {
+            // Dépôt possible tant que le dossier n'est pas parti au contrôle (ou pas encore pris par la Qualité)
+            const depot = [S.ASSIGNE, S.EN_COURS, S.ATTENTE_INFO, "en pause"].includes(ouvert.etat) || modifiable(ouvert);
+            return (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatutDossier dossier={ouvert} />
+                  {ouvert.motif_statut && <span className="text-xs text-ink/55">Motif : {ouvert.motif_statut}</span>}
+                </div>
+                <div>
+                  <p className="eyebrow mb-2">Pièces du dossier</p>
+                  <FichiersDossier
+                    key={"o" + ouvert.id}
+                    supabase={supabase}
+                    dossier={ouvert}
+                    auteur={nom}
+                    peutDeposerPieces={false}
+                    peutDeposerLivrables={depot}
+                    peutSupprimer={depot ? (f) => f.categorie === "livrable" : false}
+                    compact
+                  />
+                </div>
+                <div>
+                  <p className="eyebrow mb-2 flex items-center gap-1.5">
+                    <Icon name="message" size={12} />
+                    Échanges avec la Qualité
+                  </p>
+                  <EchangesDossier key={"oe" + ouvert.id} supabase={supabase} dossier={ouvert} auteur={nom} />
+                </div>
+                <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-line">
+                  {ouvert.a_corriger && ouvert.etat === S.ASSIGNE && (
+                    <button className="btn-secondary" onClick={() => pasDeModif(ouvert)} title="La modification demandée est déjà faite">
+                      <Icon name="checkCircle" size={14} />
+                      Pas de modif à faire
+                    </button>
+                  )}
+                  {ouvert.etat === S.ASSIGNE && (
+                    <button className="btn-primary" onClick={() => commencer(ouvert)} disabled={!!enCours} title={enCours ? "Termine ou mets en pause ton dossier en cours" : ""}>
+                      <Icon name="chevronRight" size={14} />
+                      Commencer ce dossier
+                    </button>
+                  )}
+                  {[S.ATTENTE_INFO, "en pause"].includes(ouvert.etat) && (
+                    <button
+                      className="btn-primary"
+                      onClick={async () => {
+                        await reprendre(ouvert);
+                        setOuvert(null);
+                      }}
+                      disabled={!!enCours}
+                    >
+                      <Icon name="reset" size={14} />
+                      Reprendre
+                    </button>
+                  )}
+                  <button
+                    className="btn-secondary"
+                    onClick={() => {
+                      setOuvert(null);
+                      chargerDossiers();
+                    }}
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
+
       {aModifier && (
         <Modal titre={`Modifier ${aModifier.nom_dossier}`} sousTitre="Dossier envoyé au contrôle, pas encore pris par la Qualité" onFermer={() => setAModifier(null)} taille="lg">
           <div className="flex flex-col gap-4">
@@ -762,7 +909,7 @@ export default function MesDossiersPage() {
                 auteur={nom}
                 peutDeposerPieces={false}
                 peutDeposerLivrables
-                peutSupprimer={false}
+                peutSupprimer={(f) => f.categorie === "livrable"}
                 compact
               />
             </div>

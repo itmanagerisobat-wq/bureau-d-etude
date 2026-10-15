@@ -21,7 +21,6 @@ import { delaiMoyenVerification, repartitionParJourSemaine } from "@/lib/scoring
 import { formatDuree, S } from "@/lib/constants";
 import StatistiquesAgents from "@/components/StatistiquesAgents";
 import RapportQualite from "@/components/RapportQualite";
-import DossiersParAgent from "@/components/DossiersParAgent";
 
 export default function DashboardPage() {
   const { profile, erreurProfil, options, loading, supabase } = useAppData();
@@ -138,6 +137,25 @@ export default function DashboardPage() {
           onChange={(op) => setFiltres((f) => ({ ...f, operation: op }))}
         />
 
+        {/* Accès rapide aux graphiques */}
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          {GRAPHIQUES.map((g) => (
+            <button
+              key={g.type}
+              onClick={() => setGraphiqueOuvert(g.type)}
+              className="card p-4 flex items-center gap-3 text-left hover:border-brand-300 hover:shadow-md transition"
+            >
+              <span className="w-9 h-9 rounded-lg bg-brand-50 text-brand-500 flex items-center justify-center shrink-0">
+                <Icon name={g.icone} size={17} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{g.label}</span>
+                <span className="block text-xs text-ink/45 truncate">{g.sousTitre}</span>
+              </span>
+            </button>
+          ))}
+        </section>
+
         {/* Indicateurs, dans l'ordre du circuit d'un dossier */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <KPICard label="Dans la file" value={parEtat(S.FILE)} accent="neutral" icone="inbox" />
@@ -160,11 +178,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="mb-6">
-          <ChargeParIngenieurTable ingenieurs={options.ingenieursAssignables || options.ingenieurs} dossiersEnCours={enCoursIngenieurs} />
-        </div>
-
-        <div className="mb-6">
-          <DossiersParAgent dossiers={filtres_} />
+          <ChargeParIngenieurTable ingenieurs={options.ingenieursAssignables || options.ingenieurs} dossiersEnCours={enCoursIngenieurs} dossiers={filtres_} />
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6 mb-6">
@@ -185,24 +199,6 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Accès rapide aux graphiques */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {GRAPHIQUES.map((g) => (
-            <button
-              key={g.type}
-              onClick={() => setGraphiqueOuvert(g.type)}
-              className="card p-4 flex items-center gap-3 text-left hover:border-brand-300 hover:shadow-md transition"
-            >
-              <span className="w-9 h-9 rounded-lg bg-brand-50 text-brand-500 flex items-center justify-center shrink-0">
-                <Icon name={g.icone} size={17} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold">{g.label}</span>
-                <span className="block text-xs text-ink/45 truncate">{g.sousTitre}</span>
-              </span>
-            </button>
-          ))}
-        </section>
         </>
         )}
       </main>

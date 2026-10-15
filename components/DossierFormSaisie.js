@@ -216,7 +216,7 @@ export default function DossierFormSaisie({ options, dossiersExistants, chargePa
         </label>
 
         <div className="sm:col-span-2">
-          <Champ label="Commentaire (optionnel)" value={form.commentaire} onChange={(v) => champ("commentaire", v)} textarea />
+          <Champ label="Message pour l'ingénieur (optionnel)" value={form.commentaire} onChange={(v) => champ("commentaire", v)} textarea />
         </div>
       </Bloc>
 

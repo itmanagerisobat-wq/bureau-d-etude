@@ -31,6 +31,7 @@ import { StatutDossier } from "@/components/DossierTable";
 import { equipeDuClient } from "@/lib/dispatch";
 import FichiersDossier from "@/components/FichiersDossier";
 import CelluleFichiers, { useFichiers } from "@/components/CelluleFichiers";
+import { ajouterEchange } from "@/components/EchangesDossier";
 
 export default function SaisiePage() {
   const { profile, erreurProfil, options, loading, supabase } = useAppData();
@@ -56,6 +57,7 @@ export default function SaisiePage() {
   const [file, setFile] = useState([]);
   const [recherche, setRecherche] = useState("");
   const [assignation, setAssignation] = useState({}); // { [dossierId]: ingénieur choisi }
+  const [noteAssign, setNoteAssign] = useState({}); // { [dossierId]: message pour l'ingénieur }
   const [derniereAction, setDerniereAction] = useState(null);
   const [message, setMessage] = useState(null);
   // Distribution de la file : « auto » (les ingénieurs prennent eux-mêmes) ou « manuel » (attribution ici)
@@ -119,12 +121,15 @@ export default function SaisiePage() {
       .update({ etat: S.ASSIGNE, ingenieur: ing, date_assignation: new Date().toISOString(), hors_habilitation: horsHab })
       .eq("id", d.id);
     if (error) return alert("Attribution impossible : " + error.message);
+    const note = (noteAssign[d.id] || "").trim();
     const evt = await enregistrerEvenement(supabase, d.id, "assignation", {
       nom: nomTrace,
-      cause: `→ ${ing}${horsHab ? " (hors fiche habituelle)" : ""}`,
+      cause: `→ ${ing}${horsHab ? " (hors fiche habituelle)" : ""}${note ? ` — ${note}` : ""}`,
     });
+    if (note) await ajouterEchange(supabase, d.id, nomTrace, `Pour ${ing} : ${note}`);
     memoriser(d, `Attribué à ${ing}`, evt);
     setAssignation((a) => ({ ...a, [d.id]: "" }));
+    setNoteAssign((a) => ({ ...a, [d.id]: "" }));
     chargerDossiers();
   }
 
@@ -474,6 +479,15 @@ export default function SaisiePage() {
                             </option>
                           ))}
                         </select>
+                        {assignation[d.id] && (
+                          <input
+                            className="input input-sm w-48"
+                            placeholder="Message pour l'ingénieur…"
+                            title="Facultatif : visible par l'ingénieur dans les échanges du dossier"
+                            value={noteAssign[d.id] || ""}
+                            onChange={(e) => setNoteAssign((a) => ({ ...a, [d.id]: e.target.value }))}
+                          />
+                        )}
                         <button className="btn-primary btn-xs" disabled={!assignation[d.id]} onClick={() => assignerManuel(d)}>
                           Assigner
                         </button>
