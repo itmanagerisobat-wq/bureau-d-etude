@@ -2,6 +2,19 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.23 — dossier réassigné, « Pas de modif à faire », échanges Qualité ↔ ingénieur
+
+**Migration à exécuter :** `migration_workflow_v28.sql`.
+
+- **Dossier réassigné** : le nouvel ingénieur voit le dossier (ingénieur ou ingénieur de modif, majuscules ignorées)
+  et peut déposer ses livrables. Chaque dossier de ses listes a un bouton « Ouvrir » : pièces, dépôt, échanges,
+  et « Commencer ce dossier ». La Qualité peut aussi réassigner un dossier en cours.
+- **Pas de modif à faire** : sur un dossier en retour, l'ingénieur indique que la modification est déjà faite
+  (explication obligatoire). Nouvelle tuile « Pas de modif » dans Qualité ; un nouveau retour reste possible.
+- **Échanges** : message pour l'ingénieur à l'attribution (Saisie, Qualité) et à la création ; les remarques de retour
+  et le commentaire de l'ingénieur à l'envoi arrivent dans le même fil, visible des deux côtés.
+  Pastille rouge quand un message attend une réponse.
+
 ## Version 3.22 — suppression des dépôts par l'ingénieur, tableau de bord réorganisé
 
 **Migration à exécuter :** `migration_workflow_v27.sql`.
