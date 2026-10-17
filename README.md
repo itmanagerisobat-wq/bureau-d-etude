@@ -2,6 +2,21 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.24 — nouveau style graphique (Bleu Hill conservé)
+
+**Aucune migration.** Seul l'affichage change : mêmes données, mêmes réglages, mêmes actions.
+
+- Police unique **Archivo** (titres larges, chiffres et noms de dossiers étroits), libellés sans majuscules forcées.
+- **Qualité** : bande du circuit (File → Production → À contrôler → Vérification → Audités, puis Retours, Pas de modif,
+  Annulés, Mes contrôles, Tous), recherche + fiches + période sur une ligne, tableau à gauche et dossier ouvert à droite
+  (pièces, échanges, bénéficiaire, décision, réassignation, mise de côté, suppression).
+- **Saisie** : file d'attente avec le choix Automatique / Manuelle, panneau « Ingénieurs » (connecté, libre, charge),
+  filtres actifs en pastilles au-dessus des dossiers en cours.
+- **Mes dossiers** : fiche du dossier en cours (parcours, pièces, échanges, erreurs fréquentes), colonne « Qui t'attendent »,
+  chiffres du jour en haut.
+- **Tableau de bord** : bande de chiffres clés, « L'atelier en ce moment » (connexion, temps passé / délai, envois du jour).
+- Les autres pages (Erreurs, Messagerie, Paramètres, Export…) prennent le même style.
+
 ## Version 3.23 — dossier réassigné, « Pas de modif à faire », échanges Qualité ↔ ingénieur
 
 **Migration à exécuter :** `migration_workflow_v28.sql`.

@@ -24,20 +24,20 @@ module.exports = {
         isoGold: { DEFAULT: "#B7791F", dark: "#8F5E14", light: "#FDF3DC" },
         isoNavy: { DEFAULT: "#1F6FA8", dark: "#154A72", light: "#EEF5FB" },
         night: { DEFAULT: "#1F6FA8", light: "#4A8BBB" }, // barre du haut : Bleu Hill (bleu du logo)
-        ink: "#13212F",
+        ink: "#17324A",
         paper: "#F2F6FA",
-        line: "#E3E8EE",
+        line: "#D9E3EC",
       },
       fontFamily: {
-        display: ["Manrope", "Inter", "system-ui", "sans-serif"],
-        body: ["Inter", "system-ui", "sans-serif"],
+        display: ["Archivo", "system-ui", "sans-serif"],
+        body: ["Archivo", "system-ui", "sans-serif"],
         mono: ["'IBM Plex Mono'", "ui-monospace", "monospace"],
       },
       borderRadius: {
         card: "14px",
       },
       boxShadow: {
-        card: "0 1px 2px rgba(19,33,47,0.04), 0 2px 8px rgba(19,33,47,0.04)",
+        card: "0 1px 2px rgba(23,50,74,0.05)",
         pop: "0 12px 40px rgba(19,33,47,0.18)",
       },
       keyframes: {
