@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { presence } from "@/lib/presence";
+import { heuresTraitement } from "@/lib/tempsTraitement";
 import Avatar from "@/components/ui/Avatar";
 import Icon from "@/components/ui/Icon";
 import { StatutDossier, BadgeTypeRetour } from "@/components/DossierTable";
@@ -25,7 +26,7 @@ export default function ChargeParIngenieurTable({ ingenieurs, dossiersEnCours, d
     dossiers.filter((d) => memeNom(ingenieurResponsable(d), ing) && d.date_soumission && new Date(d.date_soumission).toDateString() === aujourdhui).length;
 
   const dossierDe = (ing) => dossiersEnCours.find((d) => d.ingenieur === ing) || null;
-  const heuresDepuis = (d) => (d?.date_acceptation ? (Date.now() - new Date(d.date_acceptation).getTime()) / 3600000 : null);
+  const heuresDepuis = (d) => (d?.date_acceptation ? heuresTraitement(d) : null); // pauses exclues
 
   const occupes = ingenieurs.filter((i) => dossierDe(i)).length;
   const visibles = choisi ? ingenieurs.filter((i) => i === choisi) : ingenieurs;

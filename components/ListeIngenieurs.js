@@ -1,4 +1,5 @@
 "use client";
+import { heuresTraitement } from "@/lib/tempsTraitement";
 import { useEffect, useState } from "react";
 import Modal from "@/components/ui/Modal";
 import Avatar from "@/components/ui/Avatar";
@@ -18,7 +19,7 @@ export default function ListeIngenieurs({ supabase, options, onFermer }) {
       if (!pres.error) setConnexions(Object.fromEntries((pres.data || []).map((r) => [String(r.ingenieur || "").toLowerCase(), r])));
       const { data } = await supabase
         .from("dossiers")
-        .select("id, nom_dossier, ingenieur, etat, a_corriger, date_acceptation, nom_operation, client")
+        .select("*")
         .in("etat", [S.ASSIGNE, S.EN_COURS, S.ATTENTE_INFO]);
       setOuverts(data || []);
     })();
@@ -88,7 +89,7 @@ export default function ListeIngenieurs({ supabase, options, onFermer }) {
                 <p className="text-xs text-ink/55">
                   {l.enCours
                     ? `En cours : ${l.enCours.nom_dossier} (${l.enCours.nom_operation})${
-                        l.enCours.date_acceptation ? ` depuis ${formatDuree((Date.now() - new Date(l.enCours.date_acceptation).getTime()) / 3600000)}` : ""
+                        l.enCours.date_acceptation ? `, ${formatDuree(heuresTraitement(l.enCours))} passées` : ""
                       }`
                     : "Aucun dossier en cours"}
                 </p>

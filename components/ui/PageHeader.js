@@ -4,24 +4,24 @@ import HorlogeDigitale from "@/components/HorlogeDigitale";
 /** En-tête de page homogène : icône + titre + sous-titre + actions à droite. */
 export default function PageHeader({ icone, titre, sousTitre, actions, children, horloge = true }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+    <div className="hero-band flex flex-col sm:flex-row sm:flex-wrap sm:items-end justify-between gap-4 mb-6">
       <div className="flex items-center gap-3 min-w-0" data-icone={icone || undefined}>
         <div className="min-w-0">
           <h1 className="titre-page text-[30px]">{titre}</h1>
           {sousTitre && <p className="text-sm text-ink/60 mt-1.5">{sousTitre}</p>}
-          {children}
         </div>
       </div>
       {(actions || horloge) && (
         <div className="flex flex-wrap items-center gap-2">
           {horloge && (
-            <div className={`hidden md:block ${actions ? "mr-3 pr-4 border-r border-line" : ""}`}>
+            <div className={`hidden md:block horloge ${actions ? "mr-3 pr-4 border-r border-white/30" : ""}`}>
               <HorlogeDigitale sansLabel />
             </div>
           )}
           {actions}
         </div>
       )}
+      {children && <div className="w-full sm:basis-full">{children}</div>}
     </div>
   );
 }

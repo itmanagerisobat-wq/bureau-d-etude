@@ -133,7 +133,7 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
   }
 
   return (
-    <header className="sticky top-0 z-30 bg-night shadow-[0_1px_0_rgba(0,0,0,0.15)]">
+    <header className="sticky top-0 z-30 bg-night">
       <div className="max-w-[1800px] mx-auto px-3 sm:px-4 lg:px-5 h-16 flex items-center gap-4">
         <button
           className="btn-icon lg:hidden -ml-2 text-white hover:bg-white/15"
