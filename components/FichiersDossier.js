@@ -141,14 +141,14 @@ export default function FichiersDossier({ supabase, dossier, auteur, peutDeposer
 
   function bloc(titre, icone, liste, categorie, peutDeposer, ref, vide) {
     return (
-      <div className={`rounded-xl border border-line bg-white ${compact ? "" : ""}`}>
+      <div className="rounded-xl border border-line bg-white min-w-0 overflow-hidden">
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
-          <p className="text-xs font-semibold text-ink/70 flex items-center gap-1.5">
+          <p className="text-xs font-semibold text-ink/70 flex items-center gap-1.5 min-w-0">
             <Icon name={icone} size={13} className="text-ink/40" />
             {titre}
             <span className="badge badge-neutral">{liste.length}</span>
           </p>
-          <div className="flex gap-1">
+          <div className="flex gap-1 shrink-0">
             {liste.length > 1 && (
               <button className="btn-ghost btn-xs" onClick={() => toutTelecharger(liste)}>
                 <Icon name="download" size={12} />
@@ -176,7 +176,7 @@ export default function FichiersDossier({ supabase, dossier, auteur, peutDeposer
               <li key={f.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                 <Icon name="file" size={14} className="text-ink/40" />
                 <button className="min-w-0 flex-1 text-left hover:text-brand-600" onClick={() => telecharger(f)} title="Télécharger">
-                  <span className="block truncate font-medium">
+                  <span className="block truncate font-medium" title={f.nom_fichier}>
                     {f.categorie === "livrable" && <span className="badge badge-brand mr-1.5">v{f.version}</span>}
                     {f.nom_fichier}
                   </span>
@@ -203,7 +203,7 @@ export default function FichiersDossier({ supabase, dossier, auteur, peutDeposer
 
   return (
     <div className="flex flex-col gap-3">
-      <div className={`grid gap-3 ${compact ? "" : "sm:grid-cols-2"}`}>
+      <div className={`grid gap-3 grid-cols-[minmax(0,1fr)] ${compact ? "" : "sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
         {bloc("Pièces reçues", "inbox", pieces, "piece", peutDeposerPieces, refPieces, "Aucune pièce jointe.")}
         {bloc("Livrables de l'ingénieur", "send", livrables, "livrable", peutDeposerLivrables, refLivrables, "Aucun livrable déposé.")}
       </div>

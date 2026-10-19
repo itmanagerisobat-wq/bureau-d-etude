@@ -282,8 +282,8 @@ export default function RapportQualite({ supabase, options }) {
       const retours = [];
       const ids = dossiers.map((d) => d.id);
       for (let i = 0; i < ids.length; i += 150) {
-        const { data } = await supabase.from("dossier_retours").select("dossier_id, type, cause, created_at").in("dossier_id", ids.slice(i, i + 150));
-        retours.push(...(data || []));
+        const { data } = await supabase.from("dossier_retours").select("*").in("dossier_id", ids.slice(i, i + 150));
+        retours.push(...(data || []).filter((r) => r.annule !== true)); // retours annulés exclus
       }
       setDonnees({ dossiers, retours });
       setChargement(false);
