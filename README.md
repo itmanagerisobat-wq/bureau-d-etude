@@ -2,6 +2,18 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.26 — annuler un retour interne, compteurs à jour, dépôt corrigé
+
+**Migration à exécuter :** `migration_workflow_v30.sql` (après la V29).
+
+- **Annuler ce retour (erreur Qualité)** : sur un dossier en retour interne, le service Qualité indique un motif (obligatoire)
+  et le dossier passe Audité. Le retour reste dans l'historique, marqué « annulé », et ne compte plus dans les statistiques
+  (retours, premier coup, bibliothèque des erreurs). L'ingénieur est prévenu dans les échanges du dossier.
+- **Compteurs à jour sans actualiser** : Qualité, Saisie, Mes dossiers et Tableau de bord se rechargent toutes les 30 s
+  et dès qu'on revient sur l'onglet.
+- **Mes dossiers** : un nom de fichier très long ne fait plus déborder le bloc des livrables sur la colonne voisine
+  (le bouton Déposer reste visible ; nom complet au survol).
+
 ## Version 3.25 — modèle « Cockpit », chrono arrêté pendant la pause
 
 **Migration à exécuter :** `migration_workflow_v29.sql` (après la V28).
