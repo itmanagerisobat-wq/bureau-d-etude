@@ -14,6 +14,7 @@ import Avatar from "@/components/ui/Avatar";
 import StatutBadge from "@/components/ui/StatutBadge";
 import { gardePage } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
+import { useRafraichissement } from "@/lib/useRafraichissement";
 import { useValidateurActif } from "@/lib/useValidateurActif";
 import { chargeParIngenieur as calculerCharge } from "@/lib/scoring";
 import { enregistrerEvenement, annulerAction, instantane } from "@/lib/actions";
@@ -182,6 +183,10 @@ export default function SaisiePage() {
     if (!profile) return;
     chargerDossiers();
   }, [profile]);
+  useRafraichissement(() => {
+    chargerDossiers();
+    fichiers.recharger?.();
+  }, !!profile);
 
   async function ouvrirDossier(d) {
     setDossierOuvert(d);

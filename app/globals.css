@@ -271,6 +271,18 @@ html, body { overflow-x: clip; }
 .hero-band + *, .no-print:has(> .hero-band) + * { margin-top: -64px; position: relative; }
 .tuiles-cockpit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
 @media (min-width: 1024px) { .tuiles-cockpit { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 640px) { .tuiles-cockpit-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .tuiles-cockpit-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+/* Filtres de période (grand format dans le bandeau) et calendrier */
+.segmented-lg > button { height: 38px; padding: 0 14px; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.calendrier-pop { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; max-width: calc(100vw - 32px); z-index: 60; background: #fff; border: 1px solid #DDE5EC; border-radius: 12px; box-shadow: 0 12px 40px rgba(23, 50, 74, 0.12); padding: 16px; color: #17324A; text-align: left; }
+.calendrier-pop.gauche { right: auto; left: 0; }
+.cal-nav { width: 40px; height: 40px; border-radius: 8px; border: 1px solid #DDE5EC; background: #fff; color: #17324A; font-size: 18px; }
+.cal-nav:hover { background: #F3F7FA; }
+.hero-band .calendrier-pop .btn-secondary { background: #fff; color: #17324A; border-color: #DDE5EC; }
+.hero-band .calendrier-pop .btn-primary { background: #1F6FA8; color: #fff; }
+/* Bandeau : ligne de filtres sous les onglets */
+.filtres-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 14px; color: rgba(255, 255, 255, 0.84); font-size: 14px; }
 .tuile-cockpit {
   display: flex;
   flex-direction: column;
@@ -360,4 +372,47 @@ button.tuile-cockpit:hover { border-color: #7FB0D9; }
   .avoid-break, .rapport-table tr, figure { break-inside: avoid; page-break-inside: avoid; }
   .rapport-table thead { display: table-header-group; }
   .overflow-x-auto { overflow: visible !important; }
+}
+
+/* ---------- Facture (A4, modèle FA2610-0002) ---------- */
+.facture-a4 { width: 210mm; min-height: 297mm; padding: 14mm 16mm 10mm; background: #fff; color: #222; font-family: Helvetica, Arial, sans-serif; font-size: 9.5pt; line-height: 1.35; display: flex; flex-direction: column; box-shadow: 0 4px 24px rgba(23, 50, 74, 0.12); border-radius: 4px; font-stretch: normal; }
+.facture-a4 p { margin: 0; }
+.fa-marque { font-size: 17pt; font-weight: 700; color: #1B3A5C; letter-spacing: 0.01em; }
+.fa-titre { font-size: 15pt; font-weight: 700; color: #1B3A5C; }
+.fa-petit { font-size: 8.5pt; color: #333; }
+.fa-cadre { border: 1px solid #BFC5CC; padding: 8px 10px; min-height: 30mm; font-size: 8.5pt; }
+.fa-cadre-gris { background: #EDEDED; }
+.fa-nom { font-size: 10pt; font-weight: 700; margin-bottom: 2px !important; }
+.fa-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+.fa-table thead th { font-weight: 700; padding: 7px 6px; border-top: 1px solid #BFC5CC; border-bottom: 1px solid #BFC5CC; }
+.fa-table tbody td { padding: 4px 6px; border-bottom: 1px dotted #BFC5CC; vertical-align: top; }
+.fa-table td:first-child, .fa-table th:first-child { padding-left: 6px; }
+.fa-table tr { break-inside: avoid; page-break-inside: avoid; }
+.fa-table thead { display: table-header-group; }
+.fa-groupe td { font-weight: 700; background: #F4F6F8; border-bottom: 1px solid #BFC5CC !important; padding-top: 6px !important; }
+.fa-detail td { color: #444; font-size: 8pt; padding-top: 2px !important; padding-bottom: 2px !important; }
+.fa-detail td:first-child { padding-left: 18px !important; }
+.fa-dossier { font-weight: 600; color: #222; display: inline-block; min-width: 42mm; }
+.fa-date { color: #777; margin-left: 8px; }
+.fa-sous-total td { font-size: 8pt; font-style: italic; color: #333; border-bottom: 1px solid #BFC5CC !important; }
+.fa-bas { margin-top: auto; padding-top: 10mm; break-inside: avoid; page-break-inside: avoid; }
+.fa-bas > div:first-child { border-top: 1px solid #BFC5CC; font-size: 8.5pt; }
+.fa-banque { color: #B03030; font-weight: 700; font-size: 8pt; }
+.fa-totaux p { display: flex; justify-content: space-between; padding: 2px 0; font-size: 8.5pt; }
+.fa-totaux .fa-ttc { font-weight: 700; font-size: 10pt; padding-top: 6px; }
+.fa-pied { text-align: center; color: #8A8F96; font-size: 7.5pt; margin-top: 12mm; }
+.apercu-facture { overflow: auto; background: #E9EEF3; border-radius: 12px; padding: 24px; }
+.apercu-facture .facture-a4 { margin: 0 auto; }
+@media print {
+  body.impression-facture main > *:not(.zone-facture) { display: none !important; }
+  body.impression-facture .zone-facture { margin-top: 0 !important; }
+  body.impression-facture .grille-facture { display: block !important; }
+  body.impression-facture .apercu-facture { padding: 0 !important; background: none !important; overflow: visible !important; }
+  .facture-a4 { width: auto !important; min-height: 271mm !important; padding: 0 2mm !important; box-shadow: none !important; border-radius: 0 !important; }
+  .facture-a4, .facture-a4 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.segmented-lg { flex-wrap: wrap; max-width: 100%; }
+@media (max-width: 640px) {
+  .segmented-lg > button { padding: 0 10px; font-size: 13px; }
+  .calendrier-pop { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-width: none; }
 }

@@ -2,6 +2,13 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.27 — tableau de bord revu, production en ce moment, facturation
+
+- **Tableau de bord, Vue d'ensemble** : 5 tuiles (Nouveaux dossiers, Modifications, Audités, Retours internes, Retours client), filtre Aujourd'hui / Jour (calendrier) / Mois / Année et filtre par fiche CEE dans le bandeau ; « Production par ingénieur » avec son propre filtre ; volume par client. La section « Par fiche CEE » est retirée.
+- **Nouvel onglet « Production en ce moment »** : compteurs en direct, tableau des ingénieurs (état, dossier, fiche, client, temps / délai, envoyés du jour), tableau du service qualité, fil d'activité du jour ; rafraîchi toutes les 30 s.
+- **Nouvelle page Facturation** (Admin) : facture mensuelle par client à partir des nouveaux dossiers (modifications en option), modèle simple (comme FA2610-0002) ou détaillé (avec le nom des dossiers), numérotation automatique FAAAMM-0001, impression / PDF, historique, annulation avec motif, paramètres (émetteur, banque, mentions, clients, tarifs par fiche).
+- **Migration V31** à exécuter : tables `facturation_parametres` et `factures`.
+
 ## Version 3.26 — annuler un retour interne, compteurs à jour, dépôt corrigé
 
 **Migration à exécuter :** `migration_workflow_v30.sql` (après la V29).

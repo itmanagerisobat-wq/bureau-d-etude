@@ -19,6 +19,7 @@ import Avatar from "@/components/ui/Avatar";
 import UndoToast from "@/components/ui/UndoToast";
 import { gardePage } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
+import { useRafraichissement } from "@/lib/useRafraichissement";
 import { useValidateurActif } from "@/lib/useValidateurActif";
 import { supprimerDossierAvecTrace } from "@/lib/suppressionDossier";
 import { formatDate, formatDuree, S, STATUTS_MANUELS, TYPES_RETOUR, ETATS, rangsModifs, typeDernierRetour } from "@/lib/constants";
@@ -65,6 +66,7 @@ export default function QualitePage() {
   const [form, setForm] = useState({ cause: "", commentaire: "", reassigner: "", bibliotheque: false });
   const [assignation, setAssignation] = useState("");
   const [noteAssignation, setNoteAssignation] = useState(""); // message pour l'ingénieur à l'attribution
+  const [annulation, setAnnulation] = useState({ id: null, motif: "", erreur: "" }); // annulation d'un retour interne
   const [resumes, setResumes] = useState({}); // échanges par dossier (pastilles)
   const [dossierHistorique, setDossierHistorique] = useState(null);
   const [derniereAction, setDerniereAction] = useState(null);
@@ -98,6 +100,11 @@ export default function QualitePage() {
     setDossiers(data || []);
     setResumes(await resumeEchanges(supabase, (data || []).filter((d) => !ETATS_TERMINES.includes(d.etat)).map((d) => d.id)));
   }
+
+  useRafraichissement(() => {
+    chargerDossiers();
+    fichiers.recharger?.();
+  }, !!profile);
 
   useEffect(() => {
     if (!profile) return;
@@ -199,6 +206,8 @@ export default function QualitePage() {
   const graphie = (n) => nomsValidateurs.find((v) => v.toLowerCase() === String(n).trim().toLowerCase()) || String(n || "").trim();
   // Le compte connecté est-il lui-même un membre de la Qualité ? (sinon on demande « Audité par »)
   const qualiteConnecte = profile?.role === "qualite" && !!nomActif;
+  // Annuler un retour interne fait par erreur : service Qualité (et l'admin)
+  const peutAnnulerRetour = profile?.role === "qualite" || (profile?.role === "admin" && profile?.fonction !== "Responsable");
   // Un Responsable valide à son propre nom, sans faire partie de l'équipe Qualité
   const estResponsable = profile?.role === "admin" && profile?.fonction === "Responsable" && !!profile?.nom_complet;
   // « Audité par » proposé : la personne connectée (Qualité), sinon le choix de l'admin, sinon celui qui a le dossier en contrôle
@@ -211,9 +220,13 @@ export default function QualitePage() {
   const choixAuditeurs = (d) =>
     [...new Set([...nomsValidateurs, d?.pris_en_charge_par, auditeurAdmin].filter(Boolean).map((n) => graphie(n)))].sort((a, b) => a.localeCompare(b));
 
-  async function valider(d) {
+  // « Audité par » : nom de la liste du service Qualité (orthographe enregistrée), ajouté s'il manque
+  async function resoudreAuditeur(d) {
     let auditeur = auditeurPour(d);
-    if (!auditeur) return alert("Choisis d'abord « Audité par ».");
+    if (!auditeur) {
+      alert("Choisis d'abord « Audité par ».");
+      return null;
+    }
     // « Audité par » doit exister dans la liste du service Qualité (contrainte en base, majuscules comprises) :
     // on reprend l'orthographe enregistrée, ou on ajoute le nom s'il manque
     const { data: existant } = await supabase.from("parametres_validateurs").select("nom").ilike("nom", auditeur.replace(/[%_]/g, "")).limit(1);
@@ -225,14 +238,69 @@ export default function QualitePage() {
         "fn_import_referentiels_v2",
         estResponsable ? { p_validateurs_inactifs: [auditeur] } : { p_validateurs: [auditeur] }
       );
-      if (error) return alert(`« ${auditeur} » n'est pas dans la liste Service qualité (Paramètres → Listes) et n'a pas pu y être ajouté : ${error.message}`);
+      if (error) {
+        alert(`« ${auditeur} » n'est pas dans la liste Service qualité (Paramètres → Listes) et n'a pas pu y être ajouté : ${error.message}`);
+        return null;
+      }
     }
+    return auditeur;
+  }
+
+  async function valider(d) {
+    const auditeur = await resoudreAuditeur(d);
+    if (!auditeur) return;
     return appliquer(
       d,
       { etat: S.VALIDE, date_verification: new Date().toISOString(), valide_par: auditeur, a_corriger: false },
       "Dossier audité",
       { type: "verification_ok" }
     );
+  }
+
+  // Retour interne fait par erreur : la faute n'est pas confirmée. Le retour reste dans l'historique,
+  // marqué « annulé » (hors statistiques), et le dossier est validé directement.
+  async function annulerRetour(d) {
+    const motif = (annulation.motif || "").trim();
+    if (!motif) return setAnnulation((a) => ({ ...a, erreur: "Indique le motif de l'annulation : il reste dans l'historique du dossier." }));
+    const auditeur = await resoudreAuditeur(d);
+    if (!auditeur) return;
+    const { data: rets, error: errL } = await supabase
+      .from("dossier_retours")
+      .select("*")
+      .eq("dossier_id", d.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (errL) return alert("Lecture des retours impossible : " + errL.message);
+    const actifs = (rets || []).filter((r) => r.annule !== true);
+    const cible = actifs.find((r) => r.type === "interne");
+    if (!cible) return alert("Aucun retour interne à annuler sur ce dossier.");
+    if (!("annule" in cible)) return alert("L'annulation d'un retour demande la migration V30 : l'administrateur doit l'exécuter dans Supabase.");
+    const maintenant = new Date().toISOString();
+    const { error: errR } = await supabase
+      .from("dossier_retours")
+      .update({ annule: true, annule_motif: motif, annule_par: nomTrace, annule_le: maintenant })
+      .eq("id", cible.id);
+    if (errR) return alert("Annulation impossible : " + errR.message);
+    // Recalcul des indicateurs du dossier sans ce retour
+    const restants = actifs.filter((r) => r.id !== cible.id);
+    const internes = restants.filter((r) => r.type === "interne");
+    const champs = {
+      etat: S.VALIDE,
+      date_verification: maintenant,
+      valide_par: auditeur,
+      a_corriger: false,
+      nb_retours: Math.max(0, (d.nb_retours || 1) - 1),
+      retour_interne: internes.length > 0,
+      cause_retour_interne: internes[0]?.cause || null,
+      dernier_retour_type: restants[0]?.type || null,
+    };
+    const { error } = await supabase.from("dossiers").update(champs).eq("id", d.id);
+    if (error) return alert("Validation impossible : " + error.message);
+    await enregistrerEvenement(supabase, d.id, "retour_annule", { nom: nomTrace, cause: `${cible.cause} — ${motif}` });
+    await ajouterEchange(supabase, d.id, nomTrace || profile?.nom_complet, `Retour interne annulé (${cible.cause}) : ${motif}. Le dossier est validé, ce retour n'est pas compté.`);
+    setAnnulation({ id: null, motif: "", erreur: "" });
+    fermerPanneau();
+    chargerDossiers();
   }
 
   async function enregistrerRetour(d) {
@@ -531,6 +599,68 @@ export default function QualitePage() {
 
         {/* Décision */}
         <div className="px-5 py-4 bg-[#FAFCFE] border-t border-line flex flex-col gap-3">
+          {peutAnnulerRetour && estRetour(d) && typeDernierRetour(d) === "interne" && (
+            <div className="rounded-lg border border-isoGold/40 bg-isoGold-light/60 p-3 flex flex-col gap-2">
+              <p className="text-sm">
+                <strong>Retour interne en cours</strong>
+                {d.cause_retour_interne ? ` : ${d.cause_retour_interne}` : ""}
+              </p>
+              {annulation.id === d.id ? (
+                <>
+                  <div className="field">
+                    <label className="label" htmlFor={`motif-${d.id}`}>
+                      Motif de l'annulation
+                    </label>
+                    <input
+                      id={`motif-${d.id}`}
+                      className={`input ${annulation.erreur ? "border-isoRed" : ""}`}
+                      placeholder="ex. faute non confirmée après vérification"
+                      value={annulation.motif}
+                      onChange={(e) => setAnnulation({ id: d.id, motif: e.target.value, erreur: "" })}
+                    />
+                    {annulation.erreur && <p className="text-xs text-isoRed">{annulation.erreur}</p>}
+                  </div>
+                  {!qualiteConnecte && !estResponsable && (
+                    <div className="field">
+                      <label className="label">Audité par</label>
+                      <select
+                        className="input"
+                        value={auditeurPour(d)}
+                        onChange={(e) => {
+                          choisirAuditeur(e.target.value);
+                          setChoixAudit((c) => ({ ...c, [d.id]: e.target.value }));
+                        }}
+                      >
+                        <option value="">Choisir…</option>
+                        {choixAuditeurs(d).map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <p className="text-xs text-ink/60">
+                    Le retour reste dans l'historique, marqué « annulé », et ne compte plus dans les statistiques de l'ingénieur. Le dossier passe
+                    Audité.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <button className="btn-secondary btn-sm" onClick={() => setAnnulation({ id: null, motif: "", erreur: "" })}>
+                      Garder le retour
+                    </button>
+                    <button className="btn-success btn-sm" onClick={() => annulerRetour(d)}>
+                      Annuler le retour et valider
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button className="btn-secondary btn-sm self-start" onClick={() => setAnnulation({ id: d.id, motif: "", erreur: "" })}>
+                  <Icon name="undo" size={14} />
+                  Annuler ce retour (erreur Qualité)
+                </button>
+              )}
+            </div>
+          )}
           {d.etat === S.A_CONTROLER && (
             <button onClick={() => prendreEnControle(d)} className="btn-primary w-full" title="Le dossier passe « En vérification Q » à ton nom">
               <Icon name="shield" size={15} />

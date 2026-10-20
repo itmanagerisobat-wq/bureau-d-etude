@@ -26,10 +26,10 @@ export default function ErreursPage() {
   async function charger() {
     const { data } = await supabase
       .from("dossier_retours")
-      .select("id, cause, type, operation, commentaire, explication, bibliotheque, created_at")
+      .select("*")
       .order("created_at", { ascending: false })
       .limit(5000);
-    setRetours(data || []);
+    setRetours((data || []).filter((r) => r.annule !== true)); // retours annulés : hors statistiques
   }
 
   useEffect(() => {

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 
 // Routes accessibles uniquement à certains rôles
-const ROUTES_ADMIN_ONLY = ["/beneficiaires", "/rapport", "/export"];
+const ROUTES_ADMIN_ONLY = ["/beneficiaires", "/rapport", "/export", "/facturation"];
 const ROUTES_ADMIN_QUALITE = ["/dashboard", "/statistiques", "/qualite", "/saisie", "/parametres"];
 const ROUTES_INGENIEUR_ONLY = ["/mes-dossiers"];
 

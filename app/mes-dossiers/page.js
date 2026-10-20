@@ -20,6 +20,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import UndoToast from "@/components/ui/UndoToast";
 import { EcranChargement, EcranErreurProfil } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
+import { useRafraichissement } from "@/lib/useRafraichissement";
 import { useIngenieurSelectionne } from "@/lib/useNomSelectionne";
 import { formatDate, formatDuree, S, typeDernierRetour, TYPES_RETOUR } from "@/lib/constants";
 import { enregistrerEvenement, annulerAction, instantane } from "@/lib/actions";
@@ -129,6 +130,10 @@ export default function MesDossiersPage() {
     chargerDossiers();
     chargerProgressionEquipe();
   }, [nom]);
+  useRafraichissement(() => {
+    chargerDossiers();
+    chargerProgressionEquipe();
+  }, !!nom);
 
   const enCours = dossiers.find((d) => d.etat === S.EN_COURS) || null;
 
@@ -144,14 +149,14 @@ export default function MesDossiersPage() {
         supabase.from("dossier_retours").select("*").eq("dossier_id", enCours.id).order("created_at", { ascending: false }).limit(1),
         supabase
           .from("dossier_retours")
-          .select("cause, explication, bibliotheque")
+          .select("*")
           .eq("operation", enCours.nom_operation)
           .order("created_at", { ascending: false })
           .limit(400),
       ]);
       setDernierRetour(enCours.a_corriger ? ret?.[0] || null : null);
       const compte = {};
-      for (const r of fiche || []) {
+      for (const r of (fiche || []).filter((x) => x.annule !== true)) {
         if (!compte[r.cause]) compte[r.cause] = { cause: r.cause, total: 0, explication: null, bib: false };
         compte[r.cause].total += 1;
         if (r.bibliotheque) {
@@ -535,7 +540,7 @@ export default function MesDossiersPage() {
               </section>
             )}
 
-            <div className="grid lg:grid-cols-[minmax(0,1fr)_370px] gap-5 items-start mb-8">
+            <div className="grid lg:grid-cols-[minmax(0,1fr)_370px] gap-5 items-start mb-8 [&>*]:min-w-0">
               {/* La fiche du dossier en cours */}
               {enCours ? (
                 <article className="card overflow-hidden">
@@ -616,8 +621,8 @@ export default function MesDossiersPage() {
                     </div>
                   )}
 
-                  <div className="grid md:grid-cols-2">
-                    <section className="px-6 py-5 flex flex-col gap-5">
+                  <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <section className="px-6 py-5 flex flex-col gap-5 min-w-0">
                       <div>
                         <h3 className="text-[15px] font-bold mb-2.5">Pièces</h3>
                         <FichiersDossier
@@ -636,7 +641,7 @@ export default function MesDossiersPage() {
                         <FicheBeneficiaire key={enCours.id} dossier={enCours} onSave={(c) => majBeneficiaire(enCours, c)} compact />
                       </div>
                     </section>
-                    <section className="px-6 py-5 flex flex-col gap-5 md:border-l border-line">
+                    <section className="px-6 py-5 flex flex-col gap-5 md:border-l border-line min-w-0">
                       <div>
                         <h3 className="text-[15px] font-bold mb-2.5">Échanges avec la Qualité</h3>
                         <EchangesDossier key={"e" + enCours.id} supabase={supabase} dossier={enCours} auteur={nom} compact />
