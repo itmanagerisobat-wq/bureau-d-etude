@@ -5,11 +5,12 @@ const TON = { vert: "text-isoGreen-dark", rouge: "text-isoRed", ambre: "text-iso
 /**
  * Quatre cartes chiffrées sous le bandeau Bleu Hill : libellé, chiffre, précision colorée
  * et mini graphique des 7 derniers jours (le dernier jour en bleu foncé).
- * items : [{ label, valeur, note, ton, serie, actif, onClick, aide }]
+ * items : [{ label, valeur, note, ton, serie, actif, onClick, aide, couleur, couleurSerie }]
+ * couleur : couleur du chiffre ; couleurSerie : [clair, foncé] pour le mini graphique.
  */
-export default function TuilesCockpit({ items }) {
+export default function TuilesCockpit({ items, cinq = false }) {
   return (
-    <div className="tuiles-cockpit">
+    <div className={`tuiles-cockpit ${cinq ? "tuiles-cockpit-5" : ""}`}>
       {items.map((it) => {
         const Tag = it.onClick ? "button" : "div";
         const serie = (it.serie || []).map((v) => (v === null || v === undefined ? 0 : v));
@@ -20,14 +21,14 @@ export default function TuilesCockpit({ items }) {
               <span className="text-sm text-ink/65 truncate">{it.label}</span>
               {it.note && <span className={`text-xs font-medium whitespace-nowrap ${TON[it.ton] || TON.neutre}`}>{it.note}</span>}
             </span>
-            <b className="block font-display chiffre text-[36px] font-semibold leading-tight mt-0.5 truncate">{it.valeur}</b>
+            <b className="block font-display chiffre text-[36px] font-semibold leading-tight mt-0.5 truncate" style={it.couleur ? { color: it.couleur } : undefined}>{it.valeur}</b>
             {serie.length > 0 ? (
               <span className="flex items-end gap-1 h-9 mt-auto pt-2" aria-label="7 derniers jours">
                 {serie.map((v, i) => (
                   <i
                     key={i}
-                    className={`flex-1 rounded-t-sm ${i === serie.length - 1 ? "bg-brand-500" : "bg-[#CFE0EE]"}`}
-                    style={{ height: `${Math.max(6, (v / max) * 100)}%` }}
+                    className={`flex-1 rounded-t-sm ${it.couleurSerie ? "" : i === serie.length - 1 ? "bg-brand-500" : "bg-[#CFE0EE]"}`}
+                    style={{ height: `${Math.max(6, (v / max) * 100)}%`, background: it.couleurSerie ? it.couleurSerie[i === serie.length - 1 ? 1 : 0] : undefined }}
                   />
                 ))}
               </span>

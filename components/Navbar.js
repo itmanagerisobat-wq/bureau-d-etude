@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/qualite", label: "Qualité", icone: "shield", roles: ["admin", "qualite"] },
   { href: "/dashboard", label: "Dashboard", icone: "dashboard", roles: ["admin", "qualite"] },
   { href: "/export", label: "Export", icone: "download", roles: ["admin"] },
+  { href: "/facturation", label: "Facturation", icone: "receipt", roles: ["admin"] },
   { href: "/erreurs", label: "Erreurs", icone: "alert", roles: ["admin", "qualite", "ingenieur"] },
   { href: "/messagerie", label: "Messagerie", icone: "message", roles: ["admin", "qualite", "ingenieur"] },
   { href: "/parametres", label: "Paramètres", icone: "settings", roles: ["admin", "qualite"] },
