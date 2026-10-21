@@ -5,7 +5,8 @@ const TON = { vert: "text-isoGreen-dark", rouge: "text-isoRed", ambre: "text-iso
 /**
  * Quatre cartes chiffrées sous le bandeau Bleu Hill : libellé, chiffre, précision colorée
  * et mini graphique des 7 derniers jours (le dernier jour en bleu foncé).
- * items : [{ label, valeur, note, ton, serie, actif, onClick, aide, couleur, couleurSerie }]
+ * items : [{ label, valeur, note, ton, serie, actif, onClick, aide, couleur, couleurSerie, split }]
+ * split : [{ label, valeur, couleur }] pour afficher deux chiffres côte à côte (ex. nouveaux / modifs).
  * couleur : couleur du chiffre ; couleurSerie : [clair, foncé] pour le mini graphique.
  */
 export default function TuilesCockpit({ items, cinq = false }) {
@@ -21,7 +22,22 @@ export default function TuilesCockpit({ items, cinq = false }) {
               <span className="text-sm text-ink/65 truncate">{it.label}</span>
               {it.note && <span className={`text-xs font-medium whitespace-nowrap ${TON[it.ton] || TON.neutre}`}>{it.note}</span>}
             </span>
-            <b className="block font-display chiffre text-[36px] font-semibold leading-tight mt-0.5 truncate" style={it.couleur ? { color: it.couleur } : undefined}>{it.valeur}</b>
+            {it.split ? (
+              <span className="grid grid-cols-2 gap-3 mt-0.5">
+                {it.split.map((p) => (
+                  <span key={p.label} className="min-w-0">
+                    <b className="block font-display chiffre text-[36px] font-semibold leading-tight truncate" style={p.couleur ? { color: p.couleur } : undefined}>
+                      {p.valeur}
+                    </b>
+                    <span className="block text-xs text-ink/55 truncate">{p.label}</span>
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <b className="block font-display chiffre text-[36px] font-semibold leading-tight mt-0.5 truncate" style={it.couleur ? { color: it.couleur } : undefined}>
+                {it.valeur}
+              </b>
+            )}
             {serie.length > 0 ? (
               <span className="flex items-end gap-1 h-9 mt-auto pt-2" aria-label="7 derniers jours">
                 {serie.map((v, i) => (

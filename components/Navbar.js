@@ -7,6 +7,7 @@ import { ROLE_LABELS } from "@/lib/constants";
 import RechercheGlobale from "@/components/RechercheGlobale";
 import Icon from "@/components/ui/Icon";
 import Avatar from "@/components/ui/Avatar";
+import { useTempsReel, EVT_DOSSIERS } from "@/lib/useTempsReel";
 
 const LINKS = [
   { href: "/saisie", label: "Saisie", icone: "pencil", roles: ["admin", "qualite"] },
@@ -32,17 +33,31 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
   const refMenu = useRef(null);
   const estStaff = ["admin", "qualite"].includes(role);
 
+  // Pastille « À contrôler » du menu Qualité : rechargée toutes les 20 s, quand une page signale
+  // un changement de dossiers, et en direct (Realtime) quand un dossier change dans la base.
+  const supabaseNav = useRef(null);
+  if (!supabaseNav.current) supabaseNav.current = createClient();
+  async function majEnAttente() {
+    const { count } = await supabaseNav.current
+      .from("dossiers")
+      .select("*", { count: "exact", head: true })
+      .eq("etat", "En attente de vérification");
+    setEnAttente(count ?? null);
+  }
   useEffect(() => {
     if (!estStaff) return;
-    (async () => {
-      const supabase = createClient();
-      const { count } = await supabase
-        .from("dossiers")
-        .select("*", { count: "exact", head: true })
-        .eq("etat", "En attente de vérification");
-      setEnAttente(count ?? null);
-    })();
+    majEnAttente();
+    const t = setInterval(() => document.visibilityState === "visible" && majEnAttente(), 20000);
+    const surMaj = () => majEnAttente();
+    window.addEventListener(EVT_DOSSIERS, surMaj);
+    window.addEventListener("focus", surMaj);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener(EVT_DOSSIERS, surMaj);
+      window.removeEventListener("focus", surMaj);
+    };
   }, [role]);
+  useTempsReel(supabaseNav.current, ["dossiers"], majEnAttente, estStaff);
 
   // Messages non lus du tchat (rafraîchi toutes les 30 s)
   useEffect(() => {

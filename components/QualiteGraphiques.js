@@ -23,7 +23,7 @@ function Barres({ lignes, vide }) {
  * Colonne de droite de la page Qualité quand aucun dossier n'est ouvert :
  * envois au contrôle du jour par heure, causes de retour du mois, contrôles par contrôleur aujourd'hui.
  */
-export default function QualiteGraphiques({ dossiers }) {
+export default function QualiteGraphiques({ dossiers, verifications }) {
   const jour = auj();
   const mois = jour.slice(0, 7);
 
@@ -53,10 +53,11 @@ export default function QualiteGraphiques({ dossiers }) {
 
   // Contrôles faits aujourd'hui, par contrôleur
   const ctrl = {};
-  for (const d of dossiers) {
-    if (!d.valide_par || !d.date_verification) continue;
-    if (new Date(d.date_verification).toLocaleDateString("sv-SE") !== jour) continue;
-    ctrl[d.valide_par] = (ctrl[d.valide_par] || 0) + 1;
+  // Chaque vérification compte (un même dossier revenu et réaudité compte deux fois)
+  for (const v of verifications || dossiers.map((d) => ({ date: d.date_verification, par: d.valide_par }))) {
+    if (!v.par || !v.date) continue;
+    if (new Date(v.date).toLocaleDateString("sv-SE") !== jour) continue;
+    ctrl[v.par] = (ctrl[v.par] || 0) + 1;
   }
   const topCtrl = Object.entries(ctrl).sort((a, b) => b[1] - a[1]);
 

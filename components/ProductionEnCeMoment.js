@@ -57,7 +57,7 @@ const VERBES = {
   mise_en_pause: "a mis en pause",
   validation_ingenieur: "a corrigé et validé",
   pas_de_modif: "a indiqué « pas de modif » pour",
-  retour_annule: "a annulé le retour interne de",
+  retour_annule: "a levé le retour interne et validé",
   changement_statut_manuel: "a changé le statut de",
 };
 
@@ -72,7 +72,7 @@ function texteEvenement(e, d) {
 /**
  * Onglet « Production en ce moment » : qui fait quoi, ingénieurs et service Qualité, en direct.
  */
-export default function ProductionEnCeMoment({ dossiers, options, supabase, delaiMax = 24, equipe = "tous", fiche = "Tous" }) {
+export default function ProductionEnCeMoment({ dossiers, verifications = [], options, supabase, delaiMax = 24, equipe = "tous", fiche = "Tous" }) {
   const [choisi, setChoisi] = useState("");
   const [presIng, setPresIng] = useState({});
   const [presNom, setPresNom] = useState({});
@@ -125,7 +125,7 @@ export default function ProductionEnCeMoment({ dossiers, options, supabase, dela
   const lignesQ = [...nomsQ.values()].map((n) => {
     const d = enVerif.find((x) => cle(x.pris_en_charge_par) === cle(n)) || null;
     const p = presence(presNom[cle(n)]);
-    const audites = dossiers.filter((x) => cle(x.valide_par) === cle(n) && estAujourdhui(x.date_verification)).length;
+    const audites = verifications.filter((v) => cle(v.par) === cle(n) && estAujourdhui(v.date)).length;
     return { nom: n, d, p, etat: d ? "verif" : p.cle === "on" ? "libre" : p.cle === "absent" ? "absent" : "off", depuis: d ? heuresDepuis(d.date_prise_en_charge) : null, audites };
   });
   const ordreQ = { verif: 0, libre: 1, absent: 2, off: 3 };

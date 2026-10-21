@@ -41,14 +41,16 @@ export function listeRetours(dossiers, retours) {
 }
 
 /** Chiffres d'une période pour une fiche (ou toutes). */
-function chiffres(dossiers, retours, b, fiche) {
+function chiffres(dossiers, retours, verifs, b, fiche) {
   const ds = dossiers.filter((d) => d.etat !== "Annulé" && (fiche === "Tous" || d.nom_operation === fiche));
   const rs = retours.filter((r) => (fiche === "Tous" || r.operation === fiche) && dansBornes(r.date, b));
   const audites = ds.filter((d) => estAudite(d) && dansBornes(d.date_verification, b));
+  // Toutes les vérifications de la période (un dossier revenu et réaudité compte à chaque fois)
+  const vs = verifs.filter((v) => (fiche === "Tous" || v.dossier?.nom_operation === fiche) && dansBornes(v.date, b));
   return {
     nouveaux: ds.filter((d) => estNouveau(d) && dansBornes(d.date, b)).length,
     modifs: ds.filter((d) => estModification(d) && dansBornes(d.date, b)).length,
-    audites: audites.length,
+    audites: vs.length,
     premierCoup: audites.length ? Math.round((audites.filter((d) => !d.nb_retours).length / audites.length) * 100) : null,
     ri: rs.filter((r) => r.type === "interne").length,
     rc: rs.filter((r) => r.type === "client").length,
@@ -206,11 +208,11 @@ function ProductionParIngenieur({ dossiers, retours, ingenieurs, operations, per
 }
 
 /** Onglet « Vue d'ensemble » : 5 tuiles, production par ingénieur, volume par client. */
-export default function VueEnsemble({ dossiers, retours, options, periode, fiche }) {
+export default function VueEnsemble({ dossiers, retours, verifications = [], options, periode, fiche }) {
   const rets = listeRetours(dossiers, retours);
   const b = bornes(periode);
-  const c = chiffres(dossiers, rets, b, fiche);
-  const avant = chiffres(dossiers, rets, bornesPrecedentes(periode), fiche);
+  const c = chiffres(dossiers, rets, verifications, b, fiche);
+  const avant = chiffres(dossiers, rets, verifications, bornesPrecedentes(periode), fiche);
   const comp = libelleComparaison(periode);
   const dsF = dossiers.filter((d) => d.etat !== "Annulé" && (fiche === "Tous" || d.nom_operation === fiche));
   const rsF = rets.filter((r) => fiche === "Tous" || r.operation === fiche);
@@ -218,7 +220,7 @@ export default function VueEnsemble({ dossiers, retours, options, periode, fiche
   const tuiles = [
     { label: "Nouveaux dossiers", valeur: nf(c.nouveaux), ...ecart(c.nouveaux, avant.nouveaux, comp), serie: serieCompte(dsF, "date", estNouveau), couleur: C_NOUVEAU, couleurSerie: ["#BBD4EA", C_NOUVEAU], actif: true },
     { label: "Modifications", valeur: nf(c.modifs), ...ecart(c.modifs, avant.modifs, comp, true), serie: serieCompte(dsF, "date", estModification), couleur: T_MODIF, couleurSerie: ["#F2D9AE", C_MODIF] },
-    { label: "Audités", valeur: nf(c.audites), note: c.premierCoup === null ? "" : `${c.premierCoup} % du 1er coup`, ton: "vert", serie: serieCompte(dsF, "date_verification", estAudite), couleur: C_AUDIT, couleurSerie: ["#C7E1BF", C_AUDIT] },
+    { label: "Audités", valeur: nf(c.audites), note: c.premierCoup === null ? "" : `${c.premierCoup} % du 1er coup`, ton: "vert", serie: serieCompte(verifications.filter((v) => fiche === "Tous" || v.dossier?.nom_operation === fiche), "date"), couleur: C_AUDIT, aide: "Chaque vérification compte, même quand un dossier revient et est audité une nouvelle fois", couleurSerie: ["#C7E1BF", C_AUDIT] },
     { label: "Retours internes", valeur: nf(c.ri), ...ecart(c.ri, avant.ri, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "interne"), couleur: C_RI, couleurSerie: ["#EBD7AE", C_RI] },
     { label: "Retours client", valeur: nf(c.rc), ...ecart(c.rc, avant.rc, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "client"), couleur: C_RC, couleurSerie: ["#F1C9C5", C_RC] },
   ];
