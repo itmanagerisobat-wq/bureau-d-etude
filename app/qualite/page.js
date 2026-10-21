@@ -20,12 +20,14 @@ import UndoToast from "@/components/ui/UndoToast";
 import { gardePage } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
 import { useRafraichissement } from "@/lib/useRafraichissement";
+import { useTempsReel, signalerMajDossiers } from "@/lib/useTempsReel";
+import { chargerVerifications, listeVerifications } from "@/lib/verifications";
 import { useValidateurActif } from "@/lib/useValidateurActif";
 import { supprimerDossierAvecTrace } from "@/lib/suppressionDossier";
 import { formatDate, formatDuree, S, STATUTS_MANUELS, TYPES_RETOUR, ETATS, rangsModifs, typeDernierRetour } from "@/lib/constants";
 import { couleurEtat } from "@/lib/couleurs";
 import { enregistrerEvenement, annulerAction, instantane } from "@/lib/actions";
-import { heuresTraitement } from "@/lib/tempsTraitement";
+import { heuresTraitement, heuresTraitementFini, figerTemps } from "@/lib/tempsTraitement";
 import { attribuerAutomatiquement, equipeDuClient } from "@/lib/dispatch";
 
 const ETATS_CIRCUIT = [S.FILE, S.ASSIGNE, S.EN_COURS, S.ATTENTE_INFO, S.A_CONTROLER, S.VERIF, S.VALIDE, S.PAS_DE_MODIF];
@@ -57,6 +59,7 @@ export default function QualitePage() {
   const nomTrace = nomActif || null;
 
   const [dossiers, setDossiers] = useState([]);
+  const [verifs, setVerifs] = useState(null); // événements d'audit (chaque vérification compte)
   const [recherche, setRecherche] = useState("");
   const [seuilHeures, setSeuilHeures] = useState(1);
   const [seuilUrgence, setSeuilUrgence] = useState(24);
@@ -98,13 +101,17 @@ export default function QualitePage() {
       .order("date", { ascending: false })
       .limit(3000);
     setDossiers(data || []);
+    signalerMajDossiers();
+    setVerifs(await chargerVerifications(supabase, new Date(Date.now() - 40 * 86400000).toISOString()));
     setResumes(await resumeEchanges(supabase, (data || []).filter((d) => !ETATS_TERMINES.includes(d.etat)).map((d) => d.id)));
   }
 
   useRafraichissement(() => {
     chargerDossiers();
     fichiers.recharger?.();
-  }, !!profile);
+  }, !!profile, 20000);
+  // En direct : un dossier envoyé au contrôle apparaît sans actualiser la page
+  useTempsReel(supabase, ["dossiers"], chargerDossiers, !!profile);
 
   useEffect(() => {
     if (!profile) return;
@@ -152,7 +159,7 @@ export default function QualitePage() {
       if (errR) console.error("Retour non enregistré :", errR.message);
       retourId = r?.id || null;
     }
-    const evenementId = evenement ? await enregistrerEvenement(supabase, d.id, evenement.type, { cause: evenement.cause, nom: nomTrace }) : null;
+    const evenementId = evenement ? await enregistrerEvenement(supabase, d.id, evenement.type, { cause: evenement.cause, nom: evenement.nom || nomTrace }) : null;
     memoriser(d, libelle, evenementId, retourId);
     fermerPanneau();
     chargerDossiers();
@@ -206,7 +213,7 @@ export default function QualitePage() {
   const graphie = (n) => nomsValidateurs.find((v) => v.toLowerCase() === String(n).trim().toLowerCase()) || String(n || "").trim();
   // Le compte connecté est-il lui-même un membre de la Qualité ? (sinon on demande « Audité par »)
   const qualiteConnecte = profile?.role === "qualite" && !!nomActif;
-  // Annuler un retour interne fait par erreur : service Qualité (et l'admin)
+  // Lever un retour interne après une 2e vérification : service Qualité (et l'admin)
   const peutAnnulerRetour = profile?.role === "qualite" || (profile?.role === "admin" && profile?.fonction !== "Responsable");
   // Un Responsable valide à son propre nom, sans faire partie de l'équipe Qualité
   const estResponsable = profile?.role === "admin" && profile?.fonction === "Responsable" && !!profile?.nom_complet;
@@ -253,7 +260,7 @@ export default function QualitePage() {
       d,
       { etat: S.VALIDE, date_verification: new Date().toISOString(), valide_par: auditeur, a_corriger: false },
       "Dossier audité",
-      { type: "verification_ok" }
+      { type: "verification_ok", nom: auditeur } // l'auteur de l'audit, pour compter chaque vérification
     );
   }
 
@@ -261,9 +268,10 @@ export default function QualitePage() {
   // marqué « annulé » (hors statistiques), et le dossier est validé directement.
   async function annulerRetour(d) {
     const motif = (annulation.motif || "").trim();
-    if (!motif) return setAnnulation((a) => ({ ...a, erreur: "Indique le motif de l'annulation : il reste dans l'historique du dossier." }));
-    const auditeur = await resoudreAuditeur(d);
-    if (!auditeur) return;
+    if (!motif) return setAnnulation((a) => ({ ...a, erreur: "Indique le motif de la levée du retour : il reste dans l'historique du dossier." }));
+    const termine = dejaTermine(d);
+    const auditeur = termine ? d.valide_par : await resoudreAuditeur(d);
+    if (!termine && !auditeur) return;
     const { data: rets, error: errL } = await supabase
       .from("dossier_retours")
       .select("*")
@@ -272,22 +280,21 @@ export default function QualitePage() {
       .limit(20);
     if (errL) return alert("Lecture des retours impossible : " + errL.message);
     const actifs = (rets || []).filter((r) => r.annule !== true);
-    const cible = actifs.find((r) => r.type === "interne");
-    if (!cible) return alert("Aucun retour interne à annuler sur ce dossier.");
-    if (!("annule" in cible)) return alert("L'annulation d'un retour demande la migration V30 : l'administrateur doit l'exécuter dans Supabase.");
+    const cible = actifs.find((r) => r.type === "interne" || r.type === "qualite");
+    if (!cible) return alert("Aucun retour interne à lever sur ce dossier.");
+    if (!("annule" in cible)) return alert("Lever un retour demande la migration V30 : l'administrateur doit l'exécuter dans Supabase.");
     const maintenant = new Date().toISOString();
     const { error: errR } = await supabase
       .from("dossier_retours")
       .update({ annule: true, annule_motif: motif, annule_par: nomTrace, annule_le: maintenant })
       .eq("id", cible.id);
-    if (errR) return alert("Annulation impossible : " + errR.message);
+    if (errR) return alert("Levée du retour impossible : " + errR.message);
     // Recalcul des indicateurs du dossier sans ce retour
     const restants = actifs.filter((r) => r.id !== cible.id);
-    const internes = restants.filter((r) => r.type === "interne");
+    const internes = restants.filter((r) => r.type === "interne" || r.type === "qualite");
     const champs = {
-      etat: S.VALIDE,
-      date_verification: maintenant,
-      valide_par: auditeur,
+      // Dossier déjà audité (ou « pas de modif ») : on garde son statut, on retire seulement le retour
+      ...(termine ? {} : { etat: S.VALIDE, date_verification: maintenant, valide_par: auditeur, ...(d.etat === S.EN_COURS ? figerTemps(d) : {}) }),
       a_corriger: false,
       nb_retours: Math.max(0, (d.nb_retours || 1) - 1),
       retour_interne: internes.length > 0,
@@ -296,8 +303,8 @@ export default function QualitePage() {
     };
     const { error } = await supabase.from("dossiers").update(champs).eq("id", d.id);
     if (error) return alert("Validation impossible : " + error.message);
-    await enregistrerEvenement(supabase, d.id, "retour_annule", { nom: nomTrace, cause: `${cible.cause} — ${motif}` });
-    await ajouterEchange(supabase, d.id, nomTrace || profile?.nom_complet, `Retour interne annulé (${cible.cause}) : ${motif}. Le dossier est validé, ce retour n'est pas compté.`);
+    await enregistrerEvenement(supabase, d.id, termine ? "changement_statut_manuel" : "retour_annule", { nom: termine ? nomTrace : auditeur, cause: `Retour interne levé après 2e vérification (${cible.cause}) — ${motif}` });
+    await ajouterEchange(supabase, d.id, nomTrace || profile?.nom_complet, `Retour interne levé après 2e vérification (${cible.cause}) : ${motif}. ${termine ? "Ce retour n'est plus compté." : "Le dossier est validé, ce retour n'est pas compté."}`);
     setAnnulation({ id: null, motif: "", erreur: "" });
     fermerPanneau();
     chargerDossiers();
@@ -415,6 +422,9 @@ export default function QualitePage() {
   // Filtres (pastilles), dans l'ordre du circuit
   const CHEZ_INGENIEUR = [S.FILE, S.ASSIGNE, S.EN_COURS, S.ATTENTE_INFO];
   const estRetour = (d) => d.a_corriger && CHEZ_INGENIEUR.includes(d.etat);
+  // Un retour interne (avant ou après audit) compte encore sur ce dossier : la Qualité peut le corriger
+  const dejaTermine = (d) => [S.VALIDE, "Dossier vérifié", S.PAS_DE_MODIF].includes(d.etat);
+  const aRetourInterneActif = (d) => !!d.retour_interne && !["Annulé", "Suspendue"].includes(d.etat);
   const GROUPES = [
     { cle: "file", libelle: "En file", couleur: couleurEtat(S.FILE), test: (d) => d.etat === S.FILE && !estRetour(d) },
     {
@@ -599,28 +609,28 @@ export default function QualitePage() {
 
         {/* Décision */}
         <div className="px-5 py-4 bg-[#FAFCFE] border-t border-line flex flex-col gap-3">
-          {peutAnnulerRetour && estRetour(d) && typeDernierRetour(d) === "interne" && (
+          {peutAnnulerRetour && aRetourInterneActif(d) && (
             <div className="rounded-lg border border-isoGold/40 bg-isoGold-light/60 p-3 flex flex-col gap-2">
               <p className="text-sm">
-                <strong>Retour interne en cours</strong>
+                <strong>{estRetour(d) ? "Retour interne en cours" : "Ce dossier a eu un retour interne"}</strong>
                 {d.cause_retour_interne ? ` : ${d.cause_retour_interne}` : ""}
               </p>
               {annulation.id === d.id ? (
                 <>
                   <div className="field">
                     <label className="label" htmlFor={`motif-${d.id}`}>
-                      Motif de l'annulation
+                      Motif (2e vérification)
                     </label>
                     <input
                       id={`motif-${d.id}`}
                       className={`input ${annulation.erreur ? "border-isoRed" : ""}`}
-                      placeholder="ex. faute non confirmée après vérification"
+                      placeholder="ex. conforme après 2e vérification"
                       value={annulation.motif}
                       onChange={(e) => setAnnulation({ id: d.id, motif: e.target.value, erreur: "" })}
                     />
                     {annulation.erreur && <p className="text-xs text-isoRed">{annulation.erreur}</p>}
                   </div>
-                  {!qualiteConnecte && !estResponsable && (
+                  {!qualiteConnecte && !estResponsable && !dejaTermine(d) && (
                     <div className="field">
                       <label className="label">Audité par</label>
                       <select
@@ -641,22 +651,22 @@ export default function QualitePage() {
                     </div>
                   )}
                   <p className="text-xs text-ink/60">
-                    Le retour reste dans l'historique, marqué « annulé », et ne compte plus dans les statistiques de l'ingénieur. Le dossier passe
-                    Audité.
+                    Le retour reste dans l'historique, marqué « levé », et ne compte plus dans les statistiques de l'ingénieur ni dans le taux du premier coup.
+                    {dejaTermine(d) ? " Le dossier reste dans son statut actuel." : " Le dossier passe Audité."}
                   </p>
-                  <div className="flex justify-end gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
                     <button className="btn-secondary btn-sm" onClick={() => setAnnulation({ id: null, motif: "", erreur: "" })}>
                       Garder le retour
                     </button>
                     <button className="btn-success btn-sm" onClick={() => annulerRetour(d)}>
-                      Annuler le retour et valider
+                      {dejaTermine(d) ? "Lever le retour" : "Lever le retour et valider"}
                     </button>
                   </div>
                 </>
               ) : (
                 <button className="btn-secondary btn-sm self-start" onClick={() => setAnnulation({ id: d.id, motif: "", erreur: "" })}>
                   <Icon name="undo" size={14} />
-                  Annuler ce retour (erreur Qualité)
+                  {dejaTermine(d) ? "Lever le retour" : "Lever le retour et valider"}
                 </button>
               )}
             </div>
@@ -912,7 +922,12 @@ export default function QualitePage() {
           const delais = audites30.filter((d) => d.date_soumission).map((d) => (new Date(d.date_verification) - new Date(d.date_soumission)) / 3600000).filter((h) => h >= 0);
           const delai = delais.length ? delais.reduce((a, b) => a + b, 0) / delais.length : null;
           const envois = serieCompte(dossiers, "date_soumission");
-          const audites = serieCompte(dossiers, "date_verification", (d) => d.etat === S.VALIDE);
+          // Chaque vérification compte, même si le même dossier est revenu et a été audité plusieurs fois
+          const audites = serieCompte(listeVerifications(dossiers, verifs), "date");
+          // Délai moyen de traitement par l'ingénieur (pauses exclues), dossiers envoyés sur 30 jours
+          const envoyes30 = dossiers.filter((d) => d.date_soumission && new Date(d.date_soumission).getTime() >= il30);
+          const durees = envoyes30.map(heuresTraitementFini).filter((h) => h !== null && h > 0 && h < 24 * 30);
+          const delaiTrait = durees.length ? durees.reduce((a, b) => a + b, 0) / durees.length : null;
           const ec = ecartHier(audites);
           const aCtrl = dossiers.filter((d) => d.etat === S.A_CONTROLER && parOperation(d)).length;
           return (
@@ -929,7 +944,13 @@ export default function QualitePage() {
                   aide: "Envois au contrôle, 7 derniers jours",
                 },
                 { label: "Audités aujourd'hui", valeur: audites[6], note: ec.texte, ton: ec.ton, serie: audites, actif: filtre === "audites", onClick: () => setFiltre(filtre === "audites" ? "tous" : "audites") },
-                { label: "Premier coup", valeur: pc === null ? "—" : `${pc} %`, note: "30 derniers jours", serie: serieMoyenne(dossiers.filter((d) => d.etat === S.VALIDE), "date_verification", (d) => (d.nb_retours ? 0 : 100)) },
+                {
+                  label: "Délai moyen de traitement",
+                  valeur: delaiTrait === null ? "—" : formatDuree(delaiTrait),
+                  note: "ingénieurs · 30 jours",
+                  serie: serieMoyenne(dossiers.filter((d) => d.date_soumission), "date_soumission", heuresTraitementFini),
+                  aide: "Temps passé par l'ingénieur sur un dossier, pauses exclues, pour les dossiers envoyés au contrôle ces 30 derniers jours",
+                },
                 {
                   label: "Délai moyen de contrôle",
                   valeur: delai === null ? "—" : formatDuree(delai),
@@ -1118,7 +1139,7 @@ export default function QualitePage() {
           </div>
 
           <div className={actif_ ? "order-1 xl:order-2" : "hidden xl:block"}>
-            {actif_ ? panneauAction(actif_) : <QualiteGraphiques dossiers={dossiers} />}
+            {actif_ ? panneauAction(actif_) : <QualiteGraphiques dossiers={dossiers} verifications={listeVerifications(dossiers, verifs)} />}
           </div>
         </div>
       </main>

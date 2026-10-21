@@ -2,6 +2,20 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.29 — « Lever le retour et valider »
+
+- Qualité : le bouton « Corriger : annuler ce retour interne (erreur Qualité) » devient « Lever le retour et valider » (retour levé après une 2e vérification). Le retour reste dans l'historique, marqué « levé », et ne compte plus dans les statistiques de l'ingénieur ni dans le taux du premier coup. Pas de nouvelle migration.
+
+## Version 3.28 — pas de modif pour tous les dossiers, correction des retours, mise à jour en direct
+
+- **Ingénieur** : « Pas de modif à faire » est proposé sur tout dossier (nouveau dossier, modification ou retour) quand, après consultation, il n'y a rien à modifier. Explication obligatoire.
+- **Qualité** : « Corriger : annuler ce retour interne (erreur Qualité) » est disponible tant que le dossier a un retour interne (avant ou après audit, chez l'ingénieur, à contrôler ou déjà audité).
+- **Mise à jour en direct** : la barre de compteurs de la page Qualité et la pastille du menu se mettent à jour sans actualiser (Realtime + toutes les 20 s).
+- **Qualité** : la tuile « Premier coup » est remplacée par « Délai moyen de traitement » (ingénieurs, pauses exclues, 30 jours).
+- **Saisie** : tuiles « Dossiers à auditer », « Dossiers d'aujourd'hui » (nouveaux / modifications ajoutés aujourd'hui), « Nouveaux à auditer », « Modifs à auditer ».
+- **Vérifications** : chaque audit compte, même si un dossier revient (retour client) et est vérifié plusieurs fois (Qualité, tableau de bord, Production en ce moment).
+- **Migration V32** à exécuter : types d'événements manquants (pause, pas de modif, retour annulé, validation ingénieur étaient refusés par la base) et Realtime sur la table dossiers.
+
 ## Version 3.27 — tableau de bord revu, production en ce moment, facturation
 
 - **Tableau de bord, Vue d'ensemble** : 5 tuiles (Nouveaux dossiers, Modifications, Audités, Retours internes, Retours client), filtre Aujourd'hui / Jour (calendrier) / Mois / Année et filtre par fiche CEE dans le bandeau ; « Production par ingénieur » avec son propre filtre ; volume par client. La section « Par fiche CEE » est retirée.

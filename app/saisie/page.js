@@ -15,6 +15,7 @@ import StatutBadge from "@/components/ui/StatutBadge";
 import { gardePage } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
 import { useRafraichissement } from "@/lib/useRafraichissement";
+import { useTempsReel } from "@/lib/useTempsReel";
 import { useValidateurActif } from "@/lib/useValidateurActif";
 import { chargeParIngenieur as calculerCharge } from "@/lib/scoring";
 import { enregistrerEvenement, annulerAction, instantane } from "@/lib/actions";
@@ -186,7 +187,8 @@ export default function SaisiePage() {
   useRafraichissement(() => {
     chargerDossiers();
     fichiers.recharger?.();
-  }, !!profile);
+  }, !!profile, 20000);
+  useTempsReel(supabase, ["dossiers"], chargerDossiers, !!profile);
 
   async function ouvrirDossier(d) {
     setDossierOuvert(d);
@@ -340,21 +342,37 @@ export default function SaisiePage() {
 
         {(() => {
           const tous = [...file, ...dossiers];
-          const vieux = file.length ? Math.max(...file.map((d) => (Date.now() - new Date(d.date_mise_en_file || d.created_at).getTime()) / 3600000)) : null;
+          const ancien = (l) => (l.length ? Math.max(...l.map((d) => (Date.now() - new Date(d.date_mise_en_file || d.created_at).getTime()) / 3600000)) : null);
+          const vieux = ancien(file);
+          const estModif = (d) => d.nature_prod === "Modification";
+          const fileNv = file.filter((d) => !estModif(d));
+          const fileMd = file.filter(estModif);
+          // Ajoutés aujourd'hui (saisis ou importés), séparés nouveaux dossiers / modifications
           const crees = serieCompte(tous, "created_at");
-          const attribues = serieCompte(tous, "date_assignation");
-          const noms = options.ingenieursAssignables || options.ingenieurs || [];
-          const occ = new Set(dossiers.filter((d) => d.etat === S.EN_COURS).map((d) => String(d.ingenieur_modif || d.ingenieur || "").toLowerCase()));
-          const libres = noms.filter((n) => !occ.has(String(n).toLowerCase())).length;
+          const creesNv = serieCompte(tous, "created_at", (d) => !estModif(d));
+          const creesMd = serieCompte(tous, "created_at", estModif);
           const ec1 = ecartHier(crees);
-          const ec2 = ecartHier(attribues);
+          const noteFile = (l) => {
+            const prio = l.filter((d) => d.prioritaire).length;
+            return prio ? `${prio} prioritaire(s)` : "";
+          };
           return (
             <TuilesCockpit
               items={[
-                { label: "Dans la file", valeur: file.length, note: vieux !== null ? `plus ancien : ${formatDuree(vieux)}` : "file vide", ton: vieux !== null && vieux >= 6 ? "rouge" : "neutre", serie: serieCompte(tous, "date_mise_en_file"), actif: true },
-                { label: "Créés aujourd'hui", valeur: crees[6], note: ec1.texte, ton: ec1.ton, serie: crees },
-                { label: "Attribués aujourd'hui", valeur: attribues[6], note: ec2.texte, ton: ec2.ton, serie: attribues },
-                { label: "Ingénieurs sans dossier en cours", valeur: libres, note: `sur ${noms.length}`, serie: [] },
+                { label: "Dossiers à auditer", valeur: file.length, note: vieux !== null ? `plus ancien : ${formatDuree(vieux)}` : "file vide", ton: vieux !== null && vieux >= 6 ? "rouge" : "neutre", serie: serieCompte(tous, "date_mise_en_file"), actif: true, aide: "Tous les dossiers dans la file, en attente d'un ingénieur" },
+                {
+                  label: "Dossiers d'aujourd'hui",
+                  split: [
+                    { label: "nouveaux dossiers", valeur: creesNv[6], couleur: "#1F6FA8" },
+                    { label: "modifications", valeur: creesMd[6], couleur: "#B7791F" },
+                  ],
+                  note: ec1.texte,
+                  ton: ec1.ton,
+                  serie: crees,
+                  aide: "Dossiers ajoutés aujourd'hui dans la file (saisis ou importés)",
+                },
+                { label: "Nouveaux à auditer", valeur: fileNv.length, aide: "Nouveaux dossiers dans la file", couleur: "#1F6FA8", note: noteFile(fileNv), ton: "neutre", serie: serieCompte(tous, "date_mise_en_file", (d) => !estModif(d)) },
+                { label: "Modifs à auditer", valeur: fileMd.length, aide: "Modifications dans la file", couleur: "#B7791F", note: noteFile(fileMd), ton: "neutre", serie: serieCompte(tous, "date_mise_en_file", estModif) },
               ]}
             />
           );

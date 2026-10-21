@@ -10,12 +10,14 @@ import VueEnsemble from "@/components/VueEnsemble";
 import ProductionEnCeMoment, { FiltreEquipe } from "@/components/ProductionEnCeMoment";
 import FiltrePeriode, { FiltreFiche } from "@/components/FiltrePeriode";
 import { libellePeriode } from "@/lib/periode";
+import { chargerVerifications, debutHistorique, listeVerifications } from "@/lib/verifications";
 import PageHeader from "@/components/ui/PageHeader";
 import Icon from "@/components/ui/Icon";
 import { gardePage } from "@/components/ui/Screens";
 import { useAppData, appliquerFiltres, FILTRES_INITIAUX } from "@/lib/useAppData";
 import { useValidateurActif } from "@/lib/useValidateurActif";
 import { useRafraichissement } from "@/lib/useRafraichissement";
+import { useTempsReel } from "@/lib/useTempsReel";
 import StatistiquesAgents from "@/components/StatistiquesAgents";
 import RapportQualite from "@/components/RapportQualite";
 
@@ -39,6 +41,7 @@ export default function DashboardPage() {
   const [equipe, setEquipe] = useState("tous");
   const [objectifs, setObjectifs] = useState({});
   const [retours, setRetours] = useState(null);
+  const [verifs, setVerifs] = useState(null); // chaque audit compte, même si le dossier revient
   const [delaiMax, setDelaiMax] = useState(8);
 
   useEffect(() => {
@@ -68,6 +71,7 @@ export default function DashboardPage() {
       // Sans la migration v9, les statistiques retombent sur les anciens indicateurs.
       // Les retours annulés (erreur Qualité) ne comptent pas dans les statistiques
       setRetours(ret.error ? null : (ret.data || []).filter((r) => r.annule !== true));
+      setVerifs(await chargerVerifications(supabase, debutHistorique()));
     }
   }
 
@@ -75,6 +79,7 @@ export default function DashboardPage() {
     if (profile) chargerTout();
   }, [profile]);
   useRafraichissement(chargerTout, !!profile);
+  useTempsReel(supabase, ["dossiers"], chargerTout, !!profile);
 
   const ecran = gardePage({ erreurProfil, loading, profile, estAdmin: nominatif, pretPersonne, nomActif, validateurs, selectionner });
   if (ecran) return ecran;
@@ -149,9 +154,9 @@ export default function DashboardPage() {
         </div>
 
 
-        {onglet === "apercu" && <VueEnsemble dossiers={dossiers} retours={retours} options={options} periode={periode} fiche={fiche} />}
+        {onglet === "apercu" && <VueEnsemble dossiers={dossiers} retours={retours} verifications={listeVerifications(dossiers, verifs)} options={options} periode={periode} fiche={fiche} />}
 
-        {onglet === "live" && <ProductionEnCeMoment dossiers={dossiers} options={options} supabase={supabase} delaiMax={delaiMax} equipe={equipe} fiche={fiche} />}
+        {onglet === "live" && <ProductionEnCeMoment dossiers={dossiers} verifications={listeVerifications(dossiers, verifs)} options={options} supabase={supabase} delaiMax={delaiMax} equipe={equipe} fiche={fiche} />}
 
         {onglet === "stats" && (
           <>

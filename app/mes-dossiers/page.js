@@ -21,6 +21,7 @@ import UndoToast from "@/components/ui/UndoToast";
 import { EcranChargement, EcranErreurProfil } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
 import { useRafraichissement } from "@/lib/useRafraichissement";
+import { useTempsReel } from "@/lib/useTempsReel";
 import { useIngenieurSelectionne } from "@/lib/useNomSelectionne";
 import { formatDate, formatDuree, S, typeDernierRetour, TYPES_RETOUR } from "@/lib/constants";
 import { enregistrerEvenement, annulerAction, instantane } from "@/lib/actions";
@@ -134,6 +135,7 @@ export default function MesDossiersPage() {
     chargerDossiers();
     chargerProgressionEquipe();
   }, !!nom);
+  useTempsReel(supabase, ["dossiers"], chargerDossiers, !!nom);
 
   const enCours = dossiers.find((d) => d.etat === S.EN_COURS) || null;
 
@@ -284,10 +286,10 @@ export default function MesDossiersPage() {
     chargerDossiers();
   }
 
-  // Après un retour (souvent un retour client) : la modification demandée est déjà faite.
+  // Nouveau dossier, modification ou retour : après consultation, il n'y a rien à modifier.
   // Le dossier passe « Pas de modif à faire », avec l'explication de l'ingénieur (visible par la Qualité).
   async function pasDeModif(d, texteSaisi = "") {
-    const explication = String(texteSaisi || "").trim() || window.prompt("Pourquoi aucune modification n'est nécessaire ? (obligatoire)", "");
+    const explication = String(texteSaisi || "").trim() || window.prompt("Pourquoi n'y a-t-il rien à modifier sur ce dossier ? (obligatoire)", "");
     if (!explication || !explication.trim()) return;
     const maintenant = new Date().toISOString();
     const { error } = await majDossier(supabase, d.id, {
@@ -681,11 +683,9 @@ export default function MesDossiersPage() {
                     <button className="btn-secondary" onClick={() => mettreEnAttente(enCours)}>
                       En attente d'info
                     </button>
-                    {enCours.a_corriger && (
-                      <button className="btn-secondary" onClick={() => pasDeModif(enCours, commentaire)} title="La modification demandée est déjà faite (le commentaire saisi sert d'explication)">
-                        Pas de modif à faire
-                      </button>
-                    )}
+                    <button className="btn-secondary" onClick={() => pasDeModif(enCours, commentaire)} title="Après consultation, rien à modifier sur ce dossier (le commentaire saisi sert d'explication)">
+                      Pas de modif à faire
+                    </button>
                     {enCours.a_corriger && autoValidation && (
                       <button className="btn-success" onClick={() => validerApresRetour(enCours)} title="Après un retour : tu as corrigé, tu valides toi-même sans renvoyer au contrôle">
                         <Icon name="checkCircle" size={15} />
@@ -898,8 +898,8 @@ export default function MesDossiersPage() {
                   <EchangesDossier key={"oe" + ouvert.id} supabase={supabase} dossier={ouvert} auteur={nom} />
                 </div>
                 <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-line">
-                  {ouvert.a_corriger && ouvert.etat === S.ASSIGNE && (
-                    <button className="btn-secondary" onClick={() => pasDeModif(ouvert)} title="La modification demandée est déjà faite">
+                  {[S.ASSIGNE, "en pause", S.ATTENTE_INFO].includes(ouvert.etat) && (
+                    <button className="btn-secondary" onClick={() => pasDeModif(ouvert)} title="Après consultation, rien à modifier sur ce dossier">
                       <Icon name="checkCircle" size={14} />
                       Pas de modif à faire
                     </button>
